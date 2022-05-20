@@ -9,7 +9,13 @@
         "moduleResolution": "node",
         "typeRoots": [
             "./node_modules/@webgpu/types",
-            "./node_modules/@types",
+            "./node_modules/@types"
         ],
+      "lib": [
+        "dom",
+        "es5",
+        "scripthost",
+        "es2015.promise"
+      ]
     }
 }
