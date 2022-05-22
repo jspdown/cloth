@@ -30,7 +30,8 @@ export class App {
         this.cloth = new Cloth(geometry)
 
         this.camera = new Camera(device, {
-            aspect: canvas.width / canvas.height
+            width: canvas.width,
+            height: canvas.height,
         })
 
         this.renderer = new Renderer(canvas, device)

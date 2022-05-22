@@ -59,7 +59,7 @@ export class PlaneGeometry implements Geometry {
                         k - widthDivisions,
                         k - 1,
                         k,
-                    ])
+                    ], indicesIdx)
                     indicesIdx += 3
                 }
                 if (i < widthDivisions - 1) {
@@ -67,7 +67,7 @@ export class PlaneGeometry implements Geometry {
                         k - widthDivisions,
                         k,
                         k - (widthDivisions - 1),
-                    ])
+                    ], indicesIdx)
                     indicesIdx += 3
                 }
             }
