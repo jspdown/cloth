@@ -4,6 +4,7 @@ import {PlaneGeometry} from "./geometry"
 import {Cloth} from "./cloth"
 import {Camera} from "./camera"
 import {Renderer} from "./renderer"
+import {Vector3} from "@math.gl/core";
 
 class Solver {
     solve(deltaTime: number, cloth: Cloth): void {}
@@ -27,7 +28,7 @@ export class App {
 
         const geometry = new PlaneGeometry(device, 4, 4, 4, 4)
 
-        this.cloth = new Cloth(geometry)
+        this.cloth = new Cloth(device, geometry, new Vector3(-2, 0, -2))
 
         this.camera = new Camera(device, {
             width: canvas.width,
@@ -56,10 +57,12 @@ export class App {
 
                 this.solver.solve(deltaTime, this.cloth)
 
-                this.renderer.render(
-                    this.cloth.getRenderPipeline(this.device, this.camera),
-                    this.cloth.geometry,
-                    this.camera)
+                const pipeline = this.cloth.getRenderPipeline(this.device, this.camera)
+
+                this.renderer.render(pipeline, this.cloth.geometry, [
+                    this.camera.uniformBindGroup,
+                    this.cloth.uniformBindGroup,
+                ])
 
                 window.requestAnimationFrame(tick)
             }

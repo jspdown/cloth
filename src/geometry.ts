@@ -16,6 +16,21 @@ export class PlaneGeometry implements Geometry {
 
     private device: GPUDevice
 
+    /*
+        1 --- 2 --- 3 --- 4
+        |  /  |  /  |  /  |
+        1 --- 2 --- 3 --- 4
+        |  /  |  /  |  /  |
+        1 --- 2 --- 3 --- 4
+        |  /  |  /  |  /  |
+        1 --- 2 --- 3 --- 4
+
+
+        0 --- 1  => 0 - 2 - 1
+        |  /  |  => 1 - 2 - 3
+        2 --- 3
+     */
+
     constructor(device: GPUDevice, width: number, height: number, widthDivisions: number, heightDivisions: number) {
         this.device = device
 
@@ -24,14 +39,14 @@ export class PlaneGeometry implements Geometry {
 
         const vertexComponents = 6
 
-        const triangles = 2 * (heightDivisions - 1) * (widthDivisions - 1)
-        this.vertices = new Float32Array(heightDivisions * widthDivisions * vertexComponents)
+        const triangles = 2 * heightDivisions * widthDivisions
+        this.vertices = new Float32Array((heightDivisions + 1) * (widthDivisions + 1) * vertexComponents)
         this.indices = new Uint16Array(3 * triangles)
-
+        
         let verticesIdx = 0
         let indicesIdx = 0
-        for (let j = 0; j < heightDivisions; j++) {
-            for (let i = 0; i < widthDivisions; i++) {
+        for (let j = 0; j <= heightDivisions; j++) {
+            for (let i = 0; i <= widthDivisions; i++) {
                 const vertex = [
                     /* px */ i * widthStep,
                     /* py */ 0,
@@ -40,6 +55,7 @@ export class PlaneGeometry implements Geometry {
                     /* ny */ 1,
                     /* nz */ 0,
                 ]
+
                 this.vertices.set(vertex, verticesIdx)
                 verticesIdx += vertexComponents
 
@@ -52,21 +68,20 @@ export class PlaneGeometry implements Geometry {
                     continue
                 }
 
-                const k = i + j * widthDivisions
-
+                const k = i + j * (widthDivisions + 1)
                 if (i > 0) {
                     this.indices.set([
-                        k - widthDivisions,
+                        k - (widthDivisions + 1),
                         k - 1,
                         k,
                     ], indicesIdx)
                     indicesIdx += 3
                 }
-                if (i < widthDivisions - 1) {
+                if (i < widthDivisions) {
                     this.indices.set([
-                        k - widthDivisions,
+                        k - (widthDivisions + 1),
                         k,
-                        k - (widthDivisions - 1),
+                        k - widthDivisions,
                     ], indicesIdx)
                     indicesIdx += 3
                 }

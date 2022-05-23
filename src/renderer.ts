@@ -34,14 +34,14 @@ export class Renderer {
         this.depthTextureView = depthTexture.createView();
     }
 
-    render(pipeline: GPURenderPipeline, geometry: Geometry, camera: Camera): void {
+    render(pipeline: GPURenderPipeline, geometry: Geometry, bindGroups: GPUBindGroup[]): void {
         const colorTexture = this.context.getCurrentTexture();
         const colorTextureView = colorTexture.createView();
 
         let colorAttachment: GPURenderPassColorAttachment = {
             view: colorTextureView,
             loadOp: "clear",
-            clearValue: { r: 0, g: 0, b: 0, a: 1 },
+            clearValue: { r: 0.83, g: 0.85, b: 0.86, a: 1 },
             storeOp: "store",
         };
 
@@ -68,7 +68,11 @@ export class Renderer {
         passEncoder.setScissorRect(0, 0, this.width, this.height);
         passEncoder.setVertexBuffer(0, geometry.vertexBuffer);
         passEncoder.setIndexBuffer(geometry.indexBuffer, "uint16");
-        passEncoder.setBindGroup(0, camera.bindGroup)
+
+        for (let i = 0; i < bindGroups.length; i++) {
+            passEncoder.setBindGroup(i, bindGroups[i])
+        }
+
         passEncoder.drawIndexed(geometry.indices.length);
         passEncoder.end()
 

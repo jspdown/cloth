@@ -9,20 +9,22 @@ export interface Config {
     height: number
 }
 
+const float32DataSize = 4
+
 // Camera
 export class Camera {
-    public bindGroup: GPUBindGroup
-    public bindGroupLayout: GPUBindGroupLayout
-
-    private readonly device: GPUDevice
-    private readonly uniformBuffer: GPUBuffer;
+    // Uniform.
+    public uniformBindGroup: GPUBindGroup
+    public uniformBindGroupLayout: GPUBindGroupLayout
 
     private readonly config: Config
 
+    // Camera position.
     private distance: number
     private position: Vector3
     private rotation: Vector3
 
+    // Camera movement state.
     private dragging: boolean
     private rotateX: number
     private rotateY: number
@@ -31,6 +33,9 @@ export class Camera {
     private lastX: number
     private lastY: number
     private readonly limitX: number
+
+    private readonly device: GPUDevice
+    private readonly uniformBuffer: GPUBuffer;
 
     constructor(device: GPUDevice, config?: Config) {
         this.device = device
@@ -41,58 +46,53 @@ export class Camera {
         }, ...config }
 
         this.distance = 5.0
+        this.position = new Vector3(0, 0, -this.distance)
+        this.rotation = new Vector3(degToRad(90), 0, 0)
 
         this.dragging = false
-        this.rotateX = 0.0
-        this.rotateY = 0.0
+        this.rotateX = this.rotation.x
+        this.rotateY = this.rotation.y
         this.x = 0.0
         this.y = 0.0
         this.lastX = 0.0
         this.lastY = 0.0
         this.limitX = 85.0
-        this.rotation = new Vector3(0, 0, 0)
-        this.position = new Vector3(0, 0, 0)
-
-        const uniformData = this.computeUniform()
 
         this.uniformBuffer = device.createBuffer({
-            size: fourBytesAlignment(uniformData.byteLength),
+            size: 2 * float32DataSize * 4 * 4,
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-            mappedAtCreation: true,
         })
 
-        const writeUniformArr = new Float32Array(this.uniformBuffer.getMappedRange())
-        writeUniformArr.set(uniformData)
-        this.uniformBuffer.unmap();
-
-        this.bindGroupLayout = device.createBindGroupLayout({
+        this.uniformBindGroupLayout = device.createBindGroupLayout({
             entries: [
                 {
                     binding: 0,
                     visibility: GPUShaderStage.VERTEX,
                     buffer: {
                         type: "uniform" as const,
-                    }
-                }
-            ]
+                    },
+                },
+            ],
         });
 
-        this.bindGroup = device.createBindGroup({
-            layout: this.bindGroupLayout,
+        this.uniformBindGroup = device.createBindGroup({
+            layout: this.uniformBindGroupLayout,
             entries: [
                 {
                     binding: 0,
                     resource: {
-                        buffer: this.uniformBuffer
-                    }
-                }
-            ]
+                        buffer: this.uniformBuffer,
+                    },
+                },
+            ],
         });
 
         window.addEventListener("mousedown", () => this.onMouseButtonPressed())
         window.addEventListener("mouseup", () => this.onMouseButtonReleased())
         window.addEventListener("wheel", e => this.onMouseWheel(e.deltaY))
         window.addEventListener("mousemove", e => this.onMouseMove(e.clientX, e.clientY))
+
+        this.updateUniform()
     }
 
     private onMouseButtonPressed(): void {
@@ -117,16 +117,9 @@ export class Camera {
 
     private onMouseWheel(y: number): void {
         this.distance += y * 0.5
-
         this.position = new Vector3(0.0, 0.0, -this.distance)
 
         this.updateUniform()
-    }
-
-    private updateUniform(): void {
-        const data = this.computeUniform()
-
-        this.device.queue.writeBuffer(this.uniformBuffer, 0, data, 0, data.length)
     }
 
     private drag(x: number, y: number) {
@@ -158,7 +151,7 @@ export class Camera {
         this.updateUniform()
     }
 
-    private computeUniform(): Float32Array {
+    private updateUniform(): void {
         const projection = new Matrix4().perspective({
             fovy: this.config.fovy,
             near: this.config.near,
@@ -167,7 +160,12 @@ export class Camera {
         })
         const view = new Matrix4().translate(this.position).rotateXYZ(this.rotation)
 
-        return projection.multiplyRight(view).toFloat32Array()
+        const data = new Float32Array(2 * 4 * 4)
+
+        data.set(projection.toArray(), 0)
+        data.set(view.toArray(), 4 * 4)
+
+        this.device.queue.writeBuffer(this.uniformBuffer, 0, data, 0, data.length)
     }
 }
 
