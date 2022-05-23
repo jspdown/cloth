@@ -58,7 +58,7 @@ export class App {
                 this.solver.solve(deltaTime, this.cloth)
 
                 const pipeline = this.cloth.getRenderPipeline(this.camera)
-                
+
                 this.renderer.render(this.cloth.geometry, pipeline, [
                     this.camera.uniformBindGroup,
                     this.cloth.uniformBindGroup,

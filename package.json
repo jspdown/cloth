@@ -1,13 +1,13 @@
 {
-    "name": "webgpu-compute",
+    "name": "cloth",
     "version": "1.0.0",
-    "description": "WebGPU compute experiment",
+    "description": "Cloth simulation",
     "author": "Harold Ozouf",
     "license": "MIT",
     "engines": {
         "node": ">=14"
     },
-    "homepage": "https://jspdown.github.io/webgpu-compute",
+    "homepage": "https://jspdown.github.io/cloth",
     "devDependencies": {
         "@webgpu/types": "^0.1.16",
         "@webpack-cli/serve": "^1.6.1",
