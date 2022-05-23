@@ -42,7 +42,7 @@ export class PlaneGeometry implements Geometry {
         const triangles = 2 * heightDivisions * widthDivisions
         this.vertices = new Float32Array((heightDivisions + 1) * (widthDivisions + 1) * vertexComponents)
         this.indices = new Uint16Array(3 * triangles)
-        
+
         let verticesIdx = 0
         let indicesIdx = 0
         for (let j = 0; j <= heightDivisions; j++) {

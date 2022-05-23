@@ -1,5 +1,6 @@
 struct Output {
     @builtin(position) Position: vec4<f32>,
+    @location(0) Normal: vec3<f32>,
 };
 
 struct Camera {
@@ -14,6 +15,7 @@ struct Camera {
 fn main(@location(0) position: vec3<f32>, @location(1) normal: vec3<f32>) -> Output {
     var output: Output;
 
+    output.Normal = normal;
     output.Position = camera.projection * camera.view * model * vec4<f32>(position, 1.0);
 
     return output;
