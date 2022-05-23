@@ -1,4 +1,4 @@
-import {Matrix4, Vector3} from "@math.gl/core";
+import {Matrix4, Vector3} from "@math.gl/core"
 
 // Config holds the configuration of the camera.
 export interface Config {
@@ -11,7 +11,7 @@ export interface Config {
 
 const float32DataSize = 4
 
-// Camera
+// Camera is a 3D perspective camera with orbit control.
 export class Camera {
     // Uniform.
     public uniformBindGroup: GPUBindGroup
@@ -35,7 +35,7 @@ export class Camera {
     private readonly limitX: number
 
     private readonly device: GPUDevice
-    private readonly uniformBuffer: GPUBuffer;
+    private readonly uniformBuffer: GPUBuffer
 
     constructor(device: GPUDevice, config?: Config) {
         this.device = device
@@ -73,7 +73,7 @@ export class Camera {
                     },
                 },
             ],
-        });
+        })
 
         this.uniformBindGroup = device.createBindGroup({
             layout: this.uniformBindGroupLayout,
@@ -85,7 +85,7 @@ export class Camera {
                     },
                 },
             ],
-        });
+        })
 
         window.addEventListener("mousedown", () => this.onMouseButtonPressed())
         window.addEventListener("mouseup", () => this.onMouseButtonReleased())
@@ -138,7 +138,7 @@ export class Camera {
         this.lastX = x
         this.lastY = y
 
-        let epsilon = 0.01;
+        let epsilon = 0.01
 
         if (Math.abs(rotateX - this.rotateX) > epsilon || Math.abs(rotateY - this.rotateY) > epsilon) {
             this.rotateX = rotateX
@@ -167,10 +167,6 @@ export class Camera {
 
         this.device.queue.writeBuffer(this.uniformBuffer, 0, data, 0, data.length)
     }
-}
-
-function fourBytesAlignment(size: number): number {
-    return (size + 3) & ~3
 }
 
 function degToRad(degrees: number): number {

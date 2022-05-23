@@ -1,9 +1,9 @@
 import {App} from "./app"
 
 async function main() {
-    const gpu: GPU = navigator.gpu;
+    const gpu: GPU = navigator.gpu
     if (!gpu) {
-        throw new Error('WebGPU is not supported on this browser.');
+        throw new Error("WebGPU is not supported on this browser.")
     }
 
     const adapter = await gpu.requestAdapter()

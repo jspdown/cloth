@@ -1,11 +1,11 @@
-import {Geometry} from "./geometry";
+import vertShaderCode from "./shaders/triangle.vert.wgsl"
+import fragShaderCode from "./shaders/triangle.frag.wgsl"
 
-import vertShaderCode from "./shaders/triangle.vert.wgsl";
-import fragShaderCode from "./shaders/triangle.frag.wgsl";
-import {Camera} from "./camera";
-import {Matrix4, Vector3} from "@math.gl/core";
-import Vector from "@math.gl/core/dist/es5/classes/base/vector";
+import {Geometry} from "./geometry"
+import {Camera} from "./camera"
+import {Matrix4, Vector3} from "@math.gl/core"
 
+// Cloth holds a cloth mesh.
 export class Cloth {
     public geometry: Geometry
     public uniformBindGroup: GPUBindGroup
@@ -29,29 +29,34 @@ export class Cloth {
         this.renderPipeline = null
     }
 
+    // set position sets the position of the cloth.
     public set position(position: Vector3) {
         this._position = position
         this.updated = true
     }
+    // set rotation sets the rotation of the cloth.
     public set rotation(rotation: Vector3) {
         this._rotation = rotation
         this.updated = true
     }
+    // get position gets the position of the cloth.
     public get position(): Vector3 { return this._position }
+    // get rotation gets the rotation of the cloth.
     public get rotation(): Vector3 { return this._rotation }
 
-    public getRenderPipeline(device: GPUDevice, camera: Camera): GPURenderPipeline {
+    // getRenderPipeline returns the render pipeline of this object.
+    public getRenderPipeline(camera: Camera): GPURenderPipeline {
         if (this.renderPipeline) {
             this.updateUniforms()
 
             return this.renderPipeline
         }
 
-        const vertModule = device.createShaderModule({ code: vertShaderCode });
-        const fragModule = device.createShaderModule({ code: fragShaderCode });
+        const vertModule = this.device.createShaderModule({ code: vertShaderCode })
+        const fragModule = this.device.createShaderModule({ code: fragShaderCode })
 
         const uniformData = this.computeUniform()
-        this.uniformBuffer = device.createBuffer({
+        this.uniformBuffer = this.device.createBuffer({
             size: fourBytesAlignment(uniformData.byteLength),
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
             mappedAtCreation: true,
@@ -59,9 +64,9 @@ export class Cloth {
 
         const writeUniformArr = new Float32Array(this.uniformBuffer.getMappedRange())
         writeUniformArr.set(uniformData)
-        this.uniformBuffer.unmap();
+        this.uniformBuffer.unmap()
 
-        const uniformBindGroupLayout = device.createBindGroupLayout({
+        const uniformBindGroupLayout = this.device.createBindGroupLayout({
             entries: [
                 {
                     binding: 0,
@@ -73,7 +78,7 @@ export class Cloth {
             ]
         })
 
-        this.uniformBindGroup = device.createBindGroup({
+        this.uniformBindGroup = this.device.createBindGroup({
             layout: uniformBindGroupLayout,
             entries: [
                 {
@@ -83,16 +88,16 @@ export class Cloth {
                     }
                 }
             ]
-        });
+        })
 
-        const layout = device.createPipelineLayout({
+        const layout = this.device.createPipelineLayout({
             bindGroupLayouts: [
                 camera.uniformBindGroupLayout,
                 uniformBindGroupLayout,
             ],
-        });
+        })
 
-        this.renderPipeline = device.createRenderPipeline({
+        this.renderPipeline = this.device.createRenderPipeline({
             layout,
             vertex: {
                 module: vertModule,
@@ -128,7 +133,7 @@ export class Cloth {
                 depthCompare: "less",
                 format: "depth24plus-stencil8"
             },
-        });
+        })
 
         return this.renderPipeline
     }

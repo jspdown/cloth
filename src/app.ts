@@ -1,15 +1,16 @@
 import "./main.css"
 
-import {PlaneGeometry} from "./geometry"
+import {buildPlaneGeometry} from "./geometry"
 import {Cloth} from "./cloth"
 import {Camera} from "./camera"
 import {Renderer} from "./renderer"
-import {Vector3} from "@math.gl/core";
+import {Vector3} from "@math.gl/core"
 
 class Solver {
     solve(deltaTime: number, cloth: Cloth): void {}
 }
 
+// App is the application.
 export class App {
     private readonly canvas: HTMLCanvasElement
     private readonly device: GPUDevice
@@ -18,7 +19,6 @@ export class App {
 
     private renderer: Renderer
     private solver: Solver
-
     private stopped: boolean
 
     constructor(canvas: HTMLCanvasElement, device: GPUDevice) {
@@ -26,7 +26,7 @@ export class App {
         this.device = device
         this.stopped = false
 
-        const geometry = new PlaneGeometry(device, 4, 4, 4, 4)
+        const geometry = buildPlaneGeometry(device, 4, 4, 4, 4)
 
         this.cloth = new Cloth(device, geometry, new Vector3(-2, 0, -2))
 
@@ -57,9 +57,9 @@ export class App {
 
                 this.solver.solve(deltaTime, this.cloth)
 
-                const pipeline = this.cloth.getRenderPipeline(this.device, this.camera)
-
-                this.renderer.render(pipeline, this.cloth.geometry, [
+                const pipeline = this.cloth.getRenderPipeline(this.camera)
+                
+                this.renderer.render(this.cloth.geometry, pipeline, [
                     this.camera.uniformBindGroup,
                     this.cloth.uniformBindGroup,
                 ])
@@ -71,6 +71,7 @@ export class App {
         })
     }
 
+    // stop stops the application.
     public stop(): void {
         this.stopped = true
     }
