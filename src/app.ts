@@ -5,10 +5,7 @@ import {Cloth} from "./cloth"
 import {Camera} from "./camera"
 import {Renderer} from "./renderer"
 import {Vector3} from "@math.gl/core"
-
-class Solver {
-    solve(deltaTime: number, cloth: Cloth): void {}
-}
+import {Solver} from "./solver_cpu";
 
 // App is the application.
 export class App {
@@ -26,7 +23,7 @@ export class App {
         this.device = device
         this.stopped = false
 
-        const geometry = buildPlaneGeometry(device, 4, 4, 4, 4)
+        const geometry = buildPlaneGeometry(device, 4, 4, 40, 20)
 
         this.cloth = new Cloth(device, geometry, new Vector3(-2, 0, -2))
 
@@ -36,15 +33,16 @@ export class App {
         })
 
         this.renderer = new Renderer(canvas, device)
-        this.solver = new Solver()
+        this.solver = new Solver({
+            subSteps: 100,
+        })
     }
 
     // run runs the application.
     public async run(): Promise<void> {
         this.stopped = false
 
-        let lastTickTimestamp = Date.now()
-
+        let lastTickTimestamp = 0
         return new Promise((resolve, _) => {
             const tick = (timestamp: number) => {
                 if (this.stopped) {
@@ -52,10 +50,10 @@ export class App {
                     return
                 }
 
-                const deltaTime = timestamp - lastTickTimestamp
+                const deltaTimeSec = (timestamp - lastTickTimestamp) / 1000
                 lastTickTimestamp = timestamp
 
-                this.solver.solve(deltaTime, this.cloth)
+                this.solver.solve(deltaTimeSec, this.cloth)
 
                 const pipeline = this.cloth.getRenderPipeline(this.camera)
 

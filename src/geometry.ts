@@ -1,18 +1,31 @@
+import {VertexBuffer} from "./vertex";
+
+const vertexComponents = 6
+const vertexPositionOffset = 0
+const vertexNormalOffset = 3
 
 // Geometry holds a mesh geometry.
 export class Geometry {
-    public vertices: Float32Array
     public indices: Uint16Array
+    public vertices: VertexBuffer
+
+    public vertexComponents: number
+    public vertexPositionOffset: number
+    public vertexNormalOffset: number
 
     public indexBuffer: GPUBuffer
     public vertexBuffer: GPUBuffer
 
     private device: GPUDevice
 
-    constructor(device: GPUDevice, vertices: Float32Array, indices: Uint16Array) {
+    constructor(device: GPUDevice, vertices: VertexBuffer, indices: Uint16Array) {
         this.device = device
-        this.vertices = vertices;
-        this.indices = indices;
+        this.indices = indices
+        this.vertices = vertices
+
+        this.vertexComponents = vertexComponents
+        this.vertexPositionOffset = vertexPositionOffset
+        this.vertexNormalOffset = vertexNormalOffset
 
         // Initialize index buffer.
         this.indexBuffer = device.createBuffer({
@@ -28,19 +41,19 @@ export class Geometry {
 
         // Initialize vertex buffer.
         this.vertexBuffer = device.createBuffer({
-            size: fourBytesAlignment(this.vertices.byteLength),
-            usage: GPUBufferUsage.VERTEX,
+            size: fourBytesAlignment(this.vertices.buffer.byteLength),
+            usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
             mappedAtCreation: true,
         })
 
         const writeVerticesArr = new Float32Array(this.vertexBuffer.getMappedRange())
-        writeVerticesArr.set(this.vertices)
+        writeVerticesArr.set(this.vertices.buffer)
         this.vertexBuffer.unmap()
     }
 
     // upload uploads the vertices to the GPU.
     public upload(): void {
-        this.device.queue.writeBuffer(this.vertexBuffer, 0, this.vertices, 0, this.vertices.length)
+        this.device.queue.writeBuffer(this.vertexBuffer, 0, this.vertices.buffer, 0, this.vertices.buffer.length)
     }
 }
 
@@ -49,27 +62,17 @@ export function buildPlaneGeometry(device: GPUDevice, width: number, height: num
     const widthStep = width / widthDivisions
     const heightStep = height / widthDivisions
 
-    const vertexComponents = 6
-
     const triangles = 2 * heightDivisions * widthDivisions
-    const vertices = new Float32Array((heightDivisions + 1) * (widthDivisions + 1) * vertexComponents)
+    const vertices = new VertexBuffer((heightDivisions + 1) * (widthDivisions + 1))
     const indices = new Uint16Array(3 * triangles)
 
-    let verticesIdx = 0
     let indicesIdx = 0
     for (let j = 0; j <= heightDivisions; j++) {
         for (let i = 0; i <= widthDivisions; i++) {
-            const vertex = [
-                /* px */ i * widthStep,
-                /* py */ 0,
-                /* pz */ j * heightStep,
-                /* nx */ 0,
-                /* ny */ 1,
-                /* nz */ 0,
-            ]
-
-            vertices.set(vertex, verticesIdx)
-            verticesIdx += vertexComponents
+            vertices.add({
+                position: { x: i * widthStep, y: 0, z: j * heightStep },
+                normal: { x: 0, y: 1, z: 0 },
+            })
 
             // Generate triangle indices following this pattern:
             // 0 - 1 - 2    j=1, i=0 => 0, 4, 1,
