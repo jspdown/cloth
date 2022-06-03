@@ -26,7 +26,7 @@ export class App {
 
         const geometry = buildPlaneGeometry(device, 10, 10, 10, 10)
 
-        this.cloth = new Cloth(device, geometry, vec3.create(-2, 0, -2))
+        this.cloth = new Cloth(device, geometry, vec3.create(-5, 0, 0))
 
         this.camera = new Camera(device, {
             width: canvas.width,

@@ -10,6 +10,8 @@ export interface Config {
     near?: number
     width: number
     height: number
+    zoomSpeed?: number
+    distance?: number
 }
 
 const float32DataSize = 4
@@ -22,12 +24,8 @@ export class Camera {
 
     private readonly config: Config
 
-    // Camera position.
-    private distance: number
-    private position: Vector3
-    private rotation: Vector3
-
     // Camera movement state.
+    private zoom: number
     private dragging: boolean
     private rotateX: number
     private rotateY: number
@@ -46,15 +44,14 @@ export class Camera {
             fovy: Math.PI / 4,
             near: 0.1,
             far: 1000,
+            zoomSpeed: 2,
+            distance: 5,
         }, ...config }
 
-        this.distance = 5.0
-        this.position = vec3.create(0, 0, -this.distance)
-        this.rotation = vec3.create(scalar.degToRad(90), 0, 0)
-
+        this.zoom = 0
         this.dragging = false
-        this.rotateX = this.rotation.x
-        this.rotateY = this.rotation.y
+        this.rotateX = 90
+        this.rotateY = 0
         this.x = 0.0
         this.y = 0.0
         this.lastX = 0.0
@@ -119,8 +116,8 @@ export class Camera {
     }
 
     private onMouseWheel(y: number): void {
-        this.distance += y * 0.5
-        this.position.z = -this.distance
+        this.zoom += y < 0 ? -1 : 1
+
 
         this.updateUniform()
     }
@@ -146,11 +143,6 @@ export class Camera {
         if (Math.abs(rotateX - this.rotateX) > epsilon || Math.abs(rotateY - this.rotateY) > epsilon) {
             this.rotateX = rotateX
             this.rotateY = rotateY
-
-            this.position.z = -this.distance
-            this.rotation = vec3.create(
-                scalar.degToRad(this.rotateX),
-                scalar.degToRad(this.rotateY), 0.0)
         }
 
         this.updateUniform()
@@ -163,7 +155,14 @@ export class Camera {
             this.config.far,
             this.config.width / this.config.height)
 
-        const view = mat4.mulMut(mat4.translation(this.position), mat4.rotation(this.rotation))
+        const z = -Math.pow(0.95, -this.zoom) * this.config.zoomSpeed * this.config.distance
+        const position = vec3.create(0, 0, z)
+
+        const rotation = vec3.create(
+            scalar.degToRad(this.rotateX),
+            scalar.degToRad(this.rotateY), 0.0)
+
+        const view = mat4.mulMut(mat4.translation(position), mat4.rotation(rotation))
 
         const data = new Float32Array(2 * 4 * 4)
 

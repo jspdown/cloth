@@ -311,7 +311,7 @@ function buildParticles(geometry: Geometry, topology: Topology): ParticleBuffer 
     }
 
     particles.forEach((particle: Particle): void => {
-        if (particle.position.x === 0) {
+        if (particle.position.z === 0) {
             particle.inverseMass = 0.0
         }
     })
