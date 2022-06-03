@@ -3,6 +3,7 @@ import {Vector3} from "./math/vector3"
 
 import {Particle, ParticleRef} from "./particle"
 import {Cloth} from "./cloth"
+import logger from "./logger"
 
 // SolverConfig holds the configuration of the solver.
 interface SolverConfig {
@@ -26,7 +27,7 @@ export class Solver {
             ...config
         }
 
-        console.log("subSteps: ", this.config.subSteps)
+        logger.info(`subSteps: **${this.config.subSteps}**`)
     }
 
     public solve(deltaTime: number, cloth: Cloth): void {

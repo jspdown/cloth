@@ -7,6 +7,7 @@ import {Cloth} from "./cloth"
 import {Camera} from "./camera"
 import {Renderer} from "./renderer"
 import {Solver} from "./solver_cpu";
+import logger from "./logger";
 
 // App is the application.
 export class App {
@@ -28,7 +29,7 @@ export class App {
 
         this.cloth = new Cloth(device, geometry, vec3.create(-5, 0, 0))
 
-        this.camera = new Camera(device, {
+        this.camera = new Camera(canvas, device, {
             width: canvas.width,
             height: canvas.height,
         })
@@ -76,9 +77,11 @@ export class App {
         switch (e.code) {
             case "Space":
                 this.solver.paused = !this.solver.paused
+                logger.info(`simulation has been **${this.solver.paused ? "paused" : "resumed"}**`)
                 break
             case "KeyW":
                 this.cloth.wireframe = !this.cloth.wireframe
+                logger.info(`wireframe mode **${this.cloth.wireframe ? "enabled" : "disabled"}**`)
                 break
         }
     }

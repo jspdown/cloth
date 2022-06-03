@@ -10,6 +10,7 @@ import {Camera} from "./camera"
 import {Vertex} from "./vertex"
 import {Particle, ParticleBuffer} from "./particle"
 import {Constraint, StretchConstraint} from "./constraint"
+import logger from "./logger"
 
 const unit = 0.01
 const density = 0.270
@@ -38,12 +39,12 @@ export class Cloth {
         this.particles = buildParticles(this.geometry)
         this.constraints = buildConstraints(this.geometry, this.particles)
 
-        console.log("vertices:", this.geometry.vertices.count)
-        console.log("triangles:", this.geometry.topology.triangles.length)
-        console.log("edges:", this.geometry.topology.edges.length)
-        console.log("constraints:", this.constraints.length)
-        console.log("stretch compliance:", stretchCompliance)
-        console.log("bend compliance:", bendCompliance)
+        logger.info(`vertices: **${this.geometry.vertices.count}**`)
+        logger.info(`triangles: **${this.geometry.topology.triangles.length}**`)
+        logger.info(`edges: **${this.geometry.topology.edges.length}**`)
+        logger.info(`constraints: **${this.constraints.length}**`)
+        logger.info(`stretch compliance: **${stretchCompliance}**`)
+        logger.info(`bend compliance: **${bendCompliance}**`)
 
         this.updated = false
         this._position = vec3.zero()

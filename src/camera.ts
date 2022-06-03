@@ -38,7 +38,7 @@ export class Camera {
     private readonly device: GPUDevice
     private readonly uniformBuffer: GPUBuffer
 
-    constructor(device: GPUDevice, config?: Config) {
+    constructor(canvas: HTMLCanvasElement, device: GPUDevice, config?: Config) {
         this.device = device
         this.config = { ...{
             fovy: Math.PI / 4,
@@ -87,10 +87,10 @@ export class Camera {
             ],
         })
 
-        window.addEventListener("mousedown", () => this.onMouseButtonPressed())
-        window.addEventListener("mouseup", () => this.onMouseButtonReleased())
-        window.addEventListener("wheel", e => this.onMouseWheel(e.deltaY))
-        window.addEventListener("mousemove", e => this.onMouseMove(e.clientX, e.clientY))
+        canvas.addEventListener("mousedown", () => this.onMouseButtonPressed())
+        canvas.addEventListener("mouseup", () => this.onMouseButtonReleased())
+        canvas.addEventListener("wheel", e => this.onMouseWheel(e.deltaY))
+        canvas.addEventListener("mousemove", e => this.onMouseMove(e.clientX, e.clientY))
 
         this.updateUniform()
     }

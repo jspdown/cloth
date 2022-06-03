@@ -1,4 +1,5 @@
 import {App} from "./app"
+import logger from "./logger"
 
 async function main() {
     const gpu: GPU = navigator.gpu
@@ -20,6 +21,6 @@ async function main() {
 }
 
 main()
-    .then(() => console.log("done"))
-    .catch(err => console.error(err))
+    .then(() => logger.info("done"))
+    .catch(err => logger.error(err.toString()))
 
