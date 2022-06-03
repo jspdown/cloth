@@ -70,7 +70,7 @@ export class Renderer {
             passEncoder.setBindGroup(i, bindGroups[i])
         }
 
-        passEncoder.drawIndexed(geometry.indices.length)
+        passEncoder.drawIndexed(geometry.indexCount)
         passEncoder.end()
 
         this.device.queue.submit([commandEncoder.finish()])

@@ -73,9 +73,14 @@ export class App {
     }
 
     public onKeyPressed(e: KeyboardEvent): void {
-        if (e.code !== "Space") return
-
-        this.solver.paused = !this.solver.paused
+        switch (e.code) {
+            case "Space":
+                this.solver.paused = !this.solver.paused
+                break
+            case "KeyW":
+                this.cloth.wireframe = !this.cloth.wireframe
+                break
+        }
     }
 
     // stop stops the application.

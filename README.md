@@ -10,7 +10,7 @@
         --enable-unsafe-webgpu
     ```
     
-    *Tested on Google Chrome (dev) >= Version 103.0.5060.13*
+    *Tested on Google Chrome (dev) >= Version 104.0.5083.0*
 
 
 - Start serving the webapp:

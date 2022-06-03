@@ -19,12 +19,10 @@ const bendCompliance = 0.4
 // Cloth holds a cloth mesh.
 export class Cloth {
     public geometry: Geometry
-    public topology: Topology
     public particles: ParticleBuffer
     public constraints: Constraint[]
     public uniformBindGroup: GPUBindGroup
 
-    private _wireframe: boolean
     private _position: Vector3
     private _rotation: Vector3
     private updated: boolean
@@ -37,13 +35,12 @@ export class Cloth {
         this.device = device
         this.geometry = geometry
 
-        this.topology = buildTopology(this.geometry)
-        this.particles = buildParticles(this.geometry, this.topology)
-        this.constraints = buildConstraints(this.topology, this.particles)
+        this.particles = buildParticles(this.geometry)
+        this.constraints = buildConstraints(this.geometry, this.particles)
 
         console.log("vertices:", this.geometry.vertices.count)
-        console.log("triangles:", this.topology.triangles.length)
-        console.log("edges:", this.topology.edges.length)
+        console.log("triangles:", this.geometry.topology.triangles.length)
+        console.log("edges:", this.geometry.topology.edges.length)
         console.log("constraints:", this.constraints.length)
         console.log("stretch compliance:", stretchCompliance)
         console.log("bend compliance:", bendCompliance)
@@ -58,29 +55,23 @@ export class Cloth {
         this.renderPipeline = null
     }
 
-    // set position sets the position of the cloth.
     public set position(position: Vector3) {
         this._position = position
         this.updated = true
     }
-    // get position gets the position of the cloth.
     public get position(): Vector3 { return this._position }
 
-    // set rotation sets the rotation of the cloth.
     public set rotation(rotation: Vector3) {
         this._rotation = rotation
         this.updated = true
     }
-    // get rotation gets the rotation of the cloth.
     public get rotation(): Vector3 { return this._rotation }
 
     public set wireframe(wireframe: boolean) {
-        this._wireframe = wireframe
-        this.updated = true
+        this.geometry.wireframe = wireframe
+        this.renderPipeline = null
     }
-    public get wireframe(): boolean {
-        return this._wireframe
-    }
+    public get wireframe(): boolean { return this.geometry.wireframe }
 
     // updatePositionsAndNormals updates the vertex positions and normals based
     // on particles positions.
@@ -92,7 +83,7 @@ export class Cloth {
             vertex.normal = vec3.zero()
         })
 
-        for (let triangle of this.topology.triangles) {
+        for (let triangle of this.geometry.topology.triangles) {
             const pa = this.geometry.vertices.get(triangle.a)
             const pb = this.geometry.vertices.get(triangle.b)
             const pc = this.geometry.vertices.get(triangle.c)
@@ -181,7 +172,7 @@ export class Cloth {
             primitive: {
                 frontFace: "cw",
                 cullMode: "none",
-                topology: "triangle-list",
+                topology: this.geometry.primitive,
             },
             depthStencil: {
                 depthWriteEnabled: true,
@@ -208,80 +199,7 @@ export class Cloth {
     }
 }
 
-interface Topology {
-    triangles: Triangle[]
-    edges: Edge[]
-}
-
-interface Triangle {
-    a: number
-    b: number
-    c: number
-}
-
-interface Edge {
-    start: number
-    end: number
-    triangles: number[]
-}
-
-function buildTopology(geometry: Geometry) {
-    const numTriangles = geometry.indices.length / 3
-
-    const vertexTriangles = new Array(geometry.vertices.count)
-    const existingEdges: Record<string, number> = {}
-
-    const triangles: Triangle[] = []
-    const edges: Edge[] = []
-
-    const addTriangleToVertex = (id: number, i: number) => {
-        if (!vertexTriangles[id]) {
-            vertexTriangles[id] = []
-        }
-
-        vertexTriangles[id].push(i)
-    }
-
-    for (let i = 0; i < numTriangles; i++) {
-        const triangle = {
-            a: geometry.indices[i * 3],
-            b: geometry.indices[i * 3 + 1],
-            c: geometry.indices[i * 3 + 2],
-        }
-
-        addTriangleToVertex(triangle.a, i)
-        addTriangleToVertex(triangle.b, i)
-        addTriangleToVertex(triangle.c, i)
-
-        const triangleEdges = [
-            { start: Math.min(triangle.a, triangle.b), end: Math.max(triangle.a, triangle.b) },
-            { start: Math.min(triangle.b, triangle.c), end: Math.max(triangle.b, triangle.c) },
-            { start: Math.min(triangle.c, triangle.a), end: Math.max(triangle.c, triangle.a) },
-        ]
-
-        triangles.push(triangle)
-
-        for (let edge of triangleEdges) {
-            const key = `${edge.start}-${edge.end}`
-
-            if (!existingEdges[key]) {
-                edges.push({
-                    start: edge.start,
-                    end: edge.end,
-                    triangles: [i],
-                })
-                existingEdges[key] = edges.length - 1
-                continue
-            }
-
-            edges[existingEdges[key]].triangles.push(i)
-        }
-    }
-
-    return { triangles, edges }
-}
-
-function buildParticles(geometry: Geometry, topology: Topology): ParticleBuffer {
+function buildParticles(geometry: Geometry): ParticleBuffer {
     const particles = new ParticleBuffer(geometry.vertices.count)
 
     geometry.vertices.forEach((vertex: Vertex) => {
@@ -294,7 +212,7 @@ function buildParticles(geometry: Geometry, topology: Topology): ParticleBuffer 
     })
 
     // Compute particles mass.
-    for (let triangle of topology.triangles) {
+    for (let triangle of geometry.topology.triangles) {
         const pa = particles.get(triangle.a)
         const pb = particles.get(triangle.b)
         const pc = particles.get(triangle.c)
@@ -319,11 +237,11 @@ function buildParticles(geometry: Geometry, topology: Topology): ParticleBuffer 
     return particles
 }
 
-function buildConstraints(topology: Topology, particles: ParticleBuffer): Constraint[] {
+function buildConstraints(geometry: Geometry, particles: ParticleBuffer): Constraint[] {
     const constraints: Constraint[] = []
 
     // Generate stretching constraints.
-    for (let edge of topology.edges) {
+    for (let edge of geometry.topology.edges) {
         constraints.push(new StretchConstraint(
             particles.get(edge.start),
             particles.get(edge.end),
@@ -332,7 +250,7 @@ function buildConstraints(topology: Topology, particles: ParticleBuffer): Constr
     }
 
     // Generate bending constraints.
-    for (let edge of topology.edges) {
+    for (let edge of geometry.topology.edges) {
         if (edge.triangles.length == 1) {
             continue
         }
@@ -340,8 +258,8 @@ function buildConstraints(topology: Topology, particles: ParticleBuffer): Constr
             throw new Error(`Non-manifold mesh: ${edge.start}-${edge.end} shared with ${edge.triangles.length} triangles`)
         }
 
-        const t1 = topology.triangles[edge.triangles[0]]
-        const t2 = topology.triangles[edge.triangles[1]]
+        const t1 = geometry.topology.triangles[edge.triangles[0]]
+        const t2 = geometry.topology.triangles[edge.triangles[1]]
 
         let p1: number
         if (t1.a != edge.start && t1.a != edge.end) {
