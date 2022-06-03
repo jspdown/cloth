@@ -1,8 +1,13 @@
+import {Matrix1x3, Matrix3} from "./matrix3";
 
 export interface Vector3 {
     x: number
     y: number
     z: number
+}
+
+export function create(x: number, y: number, z: number): Vector3 {
+    return { x, y, z }
 }
 
 export function zero(): Vector3 {
@@ -33,6 +38,10 @@ export function squaredLength(a: Vector3): number {
     const az = a.z
 
     return ax*ax + ay*ay + az*az
+}
+
+export function dot(a: Vector3, b: Vector3): number {
+    return a.x * b.x + a.y * b.y + a.z * b.z
 }
 
 export function clone(a: Vector3): Vector3 {
@@ -203,4 +212,16 @@ export function normalizeMut(a: Vector3): Vector3 {
     a.z *= len
 
     return a
+}
+
+export function transpose(a: Vector3): Matrix1x3 {
+    return [a.x, a.y, a.z]
+}
+
+export function mul1x3(a: Vector3, b: Matrix1x3): Matrix3 {
+    return [
+        a.x*b[0], a.x*b[1], a.x*b[2],
+        a.y*b[0], a.y*b[1], a.y*b[2],
+        a.z*b[0], a.z*b[1], a.z*b[2],
+    ]
 }

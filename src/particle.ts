@@ -1,4 +1,4 @@
-import {Vector3} from "./vector";
+import {Vector3} from "./math/vector3"
 
 interface ParticleIterator { (particle: ParticleRef): void }
 

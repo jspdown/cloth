@@ -1,7 +1,5 @@
 import solverShaderCode from "./shaders/solver.compute.wgsl"
 
-import {Vector3} from "@math.gl/core";
-
 const maxParticles = 100000
 const particleSizeBytes = 9
 
@@ -33,25 +31,25 @@ export class Solver {
         this.configBuffer = device.createBuffer({
             size: 4,
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-        });
+        })
 
         this.gpuInputParticlesBuffer = device.createBuffer({
             size: fourBytesAlignment(maxParticles * particleSizeBytes),
             usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
-        });
+        })
 
         this.gpuOutputParticlesBuffer = device.createBuffer({
             size: fourBytesAlignment(maxParticles * particleSizeBytes),
             usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
-        });
+        })
 
         this.pipeline = device.createComputePipeline({
             layout: "auto",
             compute: {
                 module: shaderModule,
-                entryPoint: "main"
+                entryPoint: "main",
             },
-        });
+        })
 
         this.particlesBindGroup = device.createBindGroup({
             label: "particles-bind-group",
@@ -59,8 +57,8 @@ export class Solver {
             entries: [
                 { binding: 0, resource: { buffer: this.gpuInputParticlesBuffer } },
                 { binding: 1, resource: { buffer: this.gpuOutputParticlesBuffer } },
-            ]
-        });
+            ],
+        })
 
         this.configBindGroup = device.createBindGroup({
             label: "config-bind-group",

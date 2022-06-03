@@ -11,8 +11,8 @@ async function main() {
 
     const canvas = document.getElementById("app") as HTMLCanvasElement
 
-    canvas.width = 800
-    canvas.height = 500
+    canvas.width = 1000
+    canvas.height = 512
 
     const app = new App(canvas, device)
 

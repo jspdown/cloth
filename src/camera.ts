@@ -1,4 +1,7 @@
-import {Matrix4, Vector3} from "@math.gl/core"
+import * as vec3 from "./math/vector3"
+import * as mat4 from "./math/matrix4"
+import * as scalar from "./math/scalar"
+import {Vector3} from "./math/vector3"
 
 // Config holds the configuration of the camera.
 export interface Config {
@@ -46,8 +49,8 @@ export class Camera {
         }, ...config }
 
         this.distance = 5.0
-        this.position = new Vector3(0, 0, -this.distance)
-        this.rotation = new Vector3(degToRad(90), 0, 0)
+        this.position = vec3.create(0, 0, -this.distance)
+        this.rotation = vec3.create(scalar.degToRad(90), 0, 0)
 
         this.dragging = false
         this.rotateX = this.rotation.x
@@ -117,7 +120,7 @@ export class Camera {
 
     private onMouseWheel(y: number): void {
         this.distance += y * 0.5
-        this.position = new Vector3(0.0, 0.0, -this.distance)
+        this.position.z = -this.distance
 
         this.updateUniform()
     }
@@ -144,31 +147,29 @@ export class Camera {
             this.rotateX = rotateX
             this.rotateY = rotateY
 
-            this.position = new Vector3(0.0, 0.0, -this.distance)
-            this.rotation = new Vector3(degToRad(this.rotateX), degToRad(this.rotateY), 0.0)
+            this.position.z = -this.distance
+            this.rotation = vec3.create(
+                scalar.degToRad(this.rotateX),
+                scalar.degToRad(this.rotateY), 0.0)
         }
 
         this.updateUniform()
     }
 
     private updateUniform(): void {
-        const projection = new Matrix4().perspective({
-            fovy: this.config.fovy,
-            near: this.config.near,
-            far: this.config.far,
-            aspect: this.config.width / this.config.height
-        })
-        const view = new Matrix4().translate(this.position).rotateXYZ(this.rotation)
+        const projection = mat4.perspective(
+            this.config.fovy,
+            this.config.near,
+            this.config.far,
+            this.config.width / this.config.height)
+
+        const view = mat4.mulMut(mat4.translation(this.position), mat4.rotation(this.rotation))
 
         const data = new Float32Array(2 * 4 * 4)
 
-        data.set(projection.toArray(), 0)
-        data.set(view.toArray(), 4 * 4)
+        data.set(projection, 0)
+        data.set(view, 4 * 4)
 
         this.device.queue.writeBuffer(this.uniformBuffer, 0, data, 0, data.length)
     }
-}
-
-function degToRad(degrees: number): number {
-  return degrees * (Math.PI / 180)
 }

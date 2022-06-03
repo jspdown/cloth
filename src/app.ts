@@ -1,10 +1,11 @@
 import "./main.css"
 
+import * as vec3 from "./math/vector3"
+
 import {buildPlaneGeometry} from "./geometry"
 import {Cloth} from "./cloth"
 import {Camera} from "./camera"
 import {Renderer} from "./renderer"
-import {Vector3} from "@math.gl/core"
 import {Solver} from "./solver_cpu";
 
 // App is the application.
@@ -23,9 +24,9 @@ export class App {
         this.device = device
         this.stopped = false
 
-        const geometry = buildPlaneGeometry(device, 4, 4, 40, 20)
+        const geometry = buildPlaneGeometry(device, 10, 10, 10, 10)
 
-        this.cloth = new Cloth(device, geometry, new Vector3(-2, 0, -2))
+        this.cloth = new Cloth(device, geometry, vec3.create(-2, 0, -2))
 
         this.camera = new Camera(device, {
             width: canvas.width,
@@ -34,8 +35,10 @@ export class App {
 
         this.renderer = new Renderer(canvas, device)
         this.solver = new Solver({
-            subSteps: 100,
+            subSteps: 15,
         })
+
+        window.addEventListener("keypress", (e: KeyboardEvent) => this.onKeyPressed(e))
     }
 
     // run runs the application.
@@ -67,6 +70,12 @@ export class App {
 
             window.requestAnimationFrame(tick)
         })
+    }
+
+    public onKeyPressed(e: KeyboardEvent): void {
+        if (e.code !== "Space") return
+
+        this.solver.paused = !this.solver.paused
     }
 
     // stop stops the application.
