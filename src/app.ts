@@ -8,6 +8,7 @@ import {Camera} from "./camera"
 import {Renderer} from "./renderer"
 import {Solver} from "./solver_cpu";
 import logger from "./logger";
+import monitor from "./monitor";
 
 // App is the application.
 export class App {
@@ -46,6 +47,9 @@ export class App {
     public async run(): Promise<void> {
         this.stopped = false
 
+        const tickTimer = monitor.createTimer("tick")
+        const physicTimer = monitor.createTimer("physic")
+
         let lastTickTimestamp = 0
         return new Promise((resolve, _) => {
             const tick = (timestamp: number) => {
@@ -57,7 +61,11 @@ export class App {
                 const deltaTimeSec = (timestamp - lastTickTimestamp) / 1000
                 lastTickTimestamp = timestamp
 
+                tickTimer.start()
+
+                physicTimer.start()
                 this.solver.solve(deltaTimeSec, this.cloth)
+                physicTimer.end()
 
                 const pipeline = this.cloth.getRenderPipeline(this.camera)
 
@@ -65,6 +73,8 @@ export class App {
                     this.camera.uniformBindGroup,
                     this.cloth.uniformBindGroup,
                 ])
+
+                tickTimer.end()
 
                 window.requestAnimationFrame(tick)
             }

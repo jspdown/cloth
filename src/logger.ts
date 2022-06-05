@@ -1,3 +1,5 @@
+const renderInterval = 100
+
 interface Log {
     date: Date
     message: string
@@ -13,7 +15,7 @@ class Logger {
         this.pending = []
         this.logEl = document.getElementById("log")
 
-        setInterval(() => this.flush(), 50)
+        setInterval(() => this.flush(), renderInterval)
     }
 
     flush() {
@@ -30,8 +32,9 @@ class Logger {
             p.innerHTML = `<span class="date">${date}&nbsp&nbsp</span><span class="message">${message}</span>`
 
             this.logEl.appendChild(p)
-            this.logEl.scrollTop = this.logEl.scrollHeight;
         })
+
+        this.logEl.scrollTop = this.logEl.scrollHeight;
         this.pending = []
     }
 
