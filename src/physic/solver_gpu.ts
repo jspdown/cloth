@@ -1,4 +1,4 @@
-import solverShaderCode from "./shaders/solver.compute.wgsl"
+import solverShaderCode from "../shaders/solver.compute.wgsl"
 
 const maxParticles = 100000
 const particleSizeBytes = 9

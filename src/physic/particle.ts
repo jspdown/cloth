@@ -1,4 +1,4 @@
-import {Vector3} from "./math/vector3"
+import {Vector3} from "../math/vector3"
 
 interface ParticleIterator { (particle: ParticleRef): void }
 
@@ -94,7 +94,7 @@ export class ParticleRef {
     }
 }
 
-export class ParticleBuffer {
+export class Particles {
     private readonly buffer: Float32Array
     private count: number
 

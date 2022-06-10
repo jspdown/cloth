@@ -3,10 +3,10 @@ import "./main.css"
 import * as vec3 from "./math/vector3"
 
 import {buildPlaneGeometry} from "./geometry"
-import {Cloth} from "./cloth"
+import {Cloth} from "./physic/cloth"
 import {Camera} from "./camera"
 import {Renderer} from "./renderer"
-import {Solver} from "./solver_cpu";
+import {Solver} from "./physic/solver_cpu";
 import logger from "./logger";
 import monitor from "./monitor";
 
@@ -26,7 +26,7 @@ export class App {
         this.device = device
         this.stopped = false
 
-        const geometry = buildPlaneGeometry(device, 10, 10, 10, 10)
+        const geometry = buildPlaneGeometry(device, 10, 10, 40, 40)
 
         this.cloth = new Cloth(device, geometry, vec3.create(-5, 0, 0))
 
@@ -37,7 +37,7 @@ export class App {
 
         this.renderer = new Renderer(canvas, device)
         this.solver = new Solver({
-            subSteps: 15,
+            subSteps: 30,
         })
 
         window.addEventListener("keypress", (e: KeyboardEvent) => this.onKeyPressed(e))

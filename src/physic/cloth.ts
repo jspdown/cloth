@@ -1,27 +1,27 @@
-import vertShaderCode from "./shaders/triangle.vert.wgsl"
-import fragShaderCode from "./shaders/triangle.frag.wgsl"
+import vertShaderCode from "../shaders/triangle.vert.wgsl"
+import fragShaderCode from "../shaders/triangle.frag.wgsl"
 
-import * as vec3 from "./math/vector3"
-import * as mat4 from "./math/matrix4"
-import {Vector3} from "./math/vector3"
+import * as vec3 from "../math/vector3"
+import * as mat4 from "../math/matrix4"
+import {Vector3} from "../math/vector3"
 
-import {Geometry} from "./geometry"
-import {Camera} from "./camera"
-import {Vertex} from "./vertex"
-import {Particle, ParticleBuffer} from "./particle"
-import {Constraint, StretchConstraint} from "./constraint"
-import logger from "./logger"
+import {Geometry} from "../geometry"
+import {Camera} from "../camera"
+import {Vertex} from "../vertex"
+import {Particle, Particles} from "./particle"
+import {StretchConstraints} from "./constraint"
+import logger from "../logger"
 
 const unit = 0.01
 const density = 0.270
 const stretchCompliance = 0
-const bendCompliance = 0.4
+const bendCompliance = 0.9
 
 // Cloth holds a cloth mesh.
 export class Cloth {
     public geometry: Geometry
-    public particles: ParticleBuffer
-    public constraints: Constraint[]
+    public particles: Particles
+    public stretchConstraints: StretchConstraints
     public uniformBindGroup: GPUBindGroup
 
     private _position: Vector3
@@ -37,12 +37,12 @@ export class Cloth {
         this.geometry = geometry
 
         this.particles = buildParticles(this.geometry)
-        this.constraints = buildConstraints(this.geometry, this.particles)
+        this.stretchConstraints = buildStretchConstraints(this.geometry, this.particles)
 
         logger.info(`vertices: **${this.geometry.vertices.count}**`)
         logger.info(`triangles: **${this.geometry.topology.triangles.length}**`)
         logger.info(`edges: **${this.geometry.topology.edges.length}**`)
-        logger.info(`constraints: **${this.constraints.length}**`)
+        logger.info(`stretch constraints: **${this.stretchConstraints.count}**`)
         logger.info(`stretch compliance: **${stretchCompliance}**`)
         logger.info(`bend compliance: **${bendCompliance}**`)
 
@@ -200,8 +200,8 @@ export class Cloth {
     }
 }
 
-function buildParticles(geometry: Geometry): ParticleBuffer {
-    const particles = new ParticleBuffer(geometry.vertices.count)
+function buildParticles(geometry: Geometry): Particles {
+    const particles = new Particles(geometry.vertices.count)
 
     geometry.vertices.forEach((vertex: Vertex) => {
         particles.add({
@@ -238,16 +238,12 @@ function buildParticles(geometry: Geometry): ParticleBuffer {
     return particles
 }
 
-function buildConstraints(geometry: Geometry, particles: ParticleBuffer): Constraint[] {
-    const constraints: Constraint[] = []
+function buildStretchConstraints(geometry: Geometry, particles: Particles): StretchConstraints {
+    const constraintParticles: number[][] = []
 
     // Generate stretching constraints.
     for (let edge of geometry.topology.edges) {
-        constraints.push(new StretchConstraint(
-            particles.get(edge.start),
-            particles.get(edge.end),
-            stretchCompliance,
-        ))
+        constraintParticles.push([edge.start, edge.end, stretchCompliance])
     }
 
     // Generate bending constraints.
@@ -280,15 +276,17 @@ function buildConstraints(geometry: Geometry, particles: ParticleBuffer): Constr
             p2 = t2.c
         }
 
-        constraints.push(new StretchConstraint(
-            particles.get(p1),
-            particles.get(p2),
-            bendCompliance,
-        ))
+        constraintParticles.push([p1, p2, bendCompliance])
     }
 
     // Shuffle constraints to prevent resonances.
-    shuffle(constraints)
+    shuffle(constraintParticles)
+
+    const constraints = new StretchConstraints(constraintParticles.length)
+
+    for (let [p1, p2, compliance] of constraintParticles) {
+        constraints.add(particles.get(p1), particles.get(p2), compliance)
+    }
 
     return constraints
 }
