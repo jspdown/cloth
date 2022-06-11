@@ -6,6 +6,7 @@ export interface Particle {
     id?: number
     position: Vector3
     estimatedPosition: Vector3
+    deltaPosition: Vector3
     velocity: Vector3
     inverseMass: number
 }
@@ -37,9 +38,10 @@ export class ParticleRef {
 
     static readonly positionOffset = 0
     static readonly estimatedPositionOffset = 3
-    static readonly velocityOffset = 6
-    static readonly inverseMassOffset = 9
-    static readonly components = 10
+    static readonly deltaPositionOffset = 6
+    static readonly velocityOffset = 9
+    static readonly inverseMassOffset = 12
+    static readonly components = 13
 
     constructor(id: number, buffer: Float32Array, offset: number) {
         this.id = id
@@ -71,6 +73,19 @@ export class ParticleRef {
         this.buffer[offset] = estimatedPosition.x
         this.buffer[offset+1] = estimatedPosition.y
         this.buffer[offset+2] = estimatedPosition.z
+    }
+
+    get deltaPosition(): Vector3 {
+        const offset = this.offset + ParticleRef.deltaPositionOffset
+
+        return new Vector3Ref(this.buffer, offset)
+    }
+    set deltaPosition(deltaPosition: Vector3) {
+        const offset = this.offset + ParticleRef.deltaPositionOffset
+
+        this.buffer[offset] = deltaPosition.x
+        this.buffer[offset+1] = deltaPosition.y
+        this.buffer[offset+2] = deltaPosition.z
     }
 
     get velocity(): Vector3 {
@@ -111,6 +126,7 @@ export class Particles {
 
         p.position = particle.position
         p.estimatedPosition = particle.estimatedPosition
+        p.deltaPosition = particle.deltaPosition
         p.velocity = particle.velocity
         p.inverseMass = particle.inverseMass
 

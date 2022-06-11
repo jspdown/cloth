@@ -208,6 +208,7 @@ function buildParticles(geometry: Geometry): Particles {
             position: vertex.position,
             velocity: vec3.zero(),
             estimatedPosition: vec3.zero(),
+            deltaPosition: vec3.zero(),
             inverseMass: 0.0,
         })
     })

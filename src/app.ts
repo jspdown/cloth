@@ -26,7 +26,7 @@ export class App {
         this.device = device
         this.stopped = false
 
-        const geometry = buildPlaneGeometry(device, 10, 10, 40, 40)
+        const geometry = buildPlaneGeometry(device, 10, 10, 100, 100)
 
         this.cloth = new Cloth(device, geometry, vec3.create(-5, 0, 0))
 
@@ -37,7 +37,8 @@ export class App {
 
         this.renderer = new Renderer(canvas, device)
         this.solver = new Solver({
-            subSteps: 30,
+            subSteps: 15,
+            jacobi: false
         })
 
         window.addEventListener("keypress", (e: KeyboardEvent) => this.onKeyPressed(e))
@@ -64,7 +65,7 @@ export class App {
                 tickTimer.start()
 
                 physicTimer.start()
-                this.solver.solve(deltaTimeSec, this.cloth)
+                this.solver.solve(this.cloth)
                 physicTimer.end()
 
                 const pipeline = this.cloth.getRenderPipeline(this.camera)

@@ -20,7 +20,7 @@ export class StretchConstraintRef {
         this.offset = offset
     }
 
-    public project(particles: Particles, dt: number) {
+    public project(particles: Particles, dt: number, jacobi: boolean) {
         const p1 = particles.get(this.p1)
         const p2 = particles.get(this.p2)
 
@@ -30,8 +30,8 @@ export class StretchConstraintRef {
         }
 
         const alphaTilde = this.compliance / (dt * dt)
-
         const p1p2 = vec3.sub(p1.estimatedPosition, p2.estimatedPosition)
+
         let distance = vec3.length(p1p2)
         if (distance < epsilon) {
             return
@@ -40,10 +40,18 @@ export class StretchConstraintRef {
         const grad = vec3.divideByScalar(p1p2, distance)
 
         const c = distance - this.restDistance
-        const lagrangeMultiplier = -c / (sumInvMasses + alphaTilde)
+        const lagrangeMultiplier = -c / (sumInvMasses + alphaTilde) * 0.2
 
-        vec3.addMut(p1.estimatedPosition, vec3.multiplyByScalar(grad, lagrangeMultiplier * p1.inverseMass))
-        vec3.addMut(p2.estimatedPosition, vec3.multiplyByScalar(grad, -lagrangeMultiplier * p2.inverseMass))
+        const deltaP1 = vec3.multiplyByScalar(grad, lagrangeMultiplier * p1.inverseMass)
+        const deltaP2 = vec3.multiplyByScalar(grad, -lagrangeMultiplier * p2.inverseMass)
+
+        if (jacobi) {
+            vec3.addMut(p1.deltaPosition, deltaP1)
+            vec3.addMut(p2.deltaPosition, deltaP2)
+        } else {
+            vec3.addMut(p1.estimatedPosition, deltaP1)
+            vec3.addMut(p2.estimatedPosition, deltaP2)
+        }
     }
 
     public get p1(): number {
@@ -103,12 +111,12 @@ export class StretchConstraints {
     }
 
     // project projects all the constraints on the given particles.
-    public project(particles: Particles, dt: number) {
+    public project(particles: Particles, dt: number, jacobi: boolean) {
         for (let i = 0; i < this.count; i++) {
             const offset = i * StretchConstraintRef.components
             const constraint = new StretchConstraintRef(this.buffer, offset)
 
-            constraint.project(particles, dt)
+            constraint.project(particles, dt, jacobi)
         }
     }
 }
