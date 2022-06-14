@@ -1,6 +1,8 @@
 html {
     box-sizing: border-box;
     font-size: 62.5%; /* Set font to 1rem = 10px */
+
+    font-family: monospace;
 }
 
 *,
@@ -14,9 +16,130 @@ body {
     background-color: #ecf0f1;
     margin: 0;
     padding: 0;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    height: 100vh;
+}
+
+canvas {
+    display: block;
+    border-radius: 3px;
+    border: 1px solid #c3c3c3;
+
+    margin: 50px auto 0;
+}
+
+.box {
+    border-radius: 3px;
+    border: 1px solid #c3c3c3;
+
+    width: 1000px;
+    margin: 20px auto 0;
+}
+
+#logger {
+    height: 200px;
+
+    overflow-y: auto;
+    overflow-x: hidden;
+
+    padding: 0 10px;
+}
+
+#logger p {
+    line-height: 1em;
+    font-weight: 400;
+    font-size: 1em;
+    margin: 5px 0;
+}
+
+span.date {
+    color: #929292;
+}
+
+span.message {
+    color: #2a2a2a;
+}
+
+span.strong {
+    font-weight: bold;
+}
+
+#monitor {
+    padding: 10px;
+}
+
+#monitor ul {
+    padding: 0;
+    margin: 0;
+}
+
+#monitor ul li {
+    list-style: none;
+    line-height: 1.5em;
+}
+
+#monitor span.timer {
+    display: inline-block;
+    width: 80px;
+    color: #2a2a2a;
+    text-transform: capitalize;
+}
+
+#controller {
+    padding: 10px;
+}
+
+#controller form {
+    margin: 0;
+    padding: 0;
+}
+
+#controller form label {
+    display: block;
+    line-height: 1.5em;
+}
+
+#controller form label span {
+    display: inline-block;
+    width: 150px;
+    text-overflow: ellipsis;
+    overflow: hidden;
+    white-space: nowrap;
+    text-transform: capitalize;
+}
+
+#controller form label input, #controller form label select {
+    width: 100px;
+    position: relative;
+    top: -5px;
+}
+
+#controller form .row {
+    margin-top: 30px;
+}
+
+#controller form .column {
+    display: inline-grid;
+    justify-content: start;
+
+    margin-right: 20px;
+}
+
+input, select, button {
+    border: 1px solid #878787;
+    border-radius: 3px;
+}
+
+input:focus-visible, select:focus-visible, button:focus-visible {
+    outline: none;
+}
+
+button {
+    border: 1px solid #878787;
+    border-radius: 3px;
+    padding: 5px 15px;
+}
+
+button:hover {
+    background: #e5e5e5;
+    cursor: pointer;
 }
 
