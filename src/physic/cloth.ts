@@ -2,28 +2,26 @@ import vertShaderCode from "../shaders/triangle.vert.wgsl"
 import fragShaderCode from "../shaders/triangle.frag.wgsl"
 
 import * as vec3 from "../math/vector3"
-import * as mat4 from "../math/matrix4"
 import {Vector3} from "../math/vector3"
+import * as mat4 from "../math/matrix4"
 
 import {Geometry} from "../geometry"
 import {Camera} from "../camera"
 import {Vertex} from "../vertex"
 import {Particle, Particles} from "./particle"
-import {StretchConstraints} from "./constraint"
-import logger from "../logger"
+import {ConstraintType, Constraints} from "./constraint"
+import {logger} from "../logger"
 
 const unit = 0.01
 const density = 0.270
-const stretchCompliance = 0
-const bendCompliance = 0.9
 
 // Cloth holds a cloth mesh.
 export class Cloth {
-    public geometry: Geometry
     public particles: Particles
-    public stretchConstraints: StretchConstraints
+    public constraints: Constraints
     public uniformBindGroup: GPUBindGroup
 
+    private _geometry: Geometry
     private _position: Vector3
     private _rotation: Vector3
     private updated: boolean
@@ -32,19 +30,11 @@ export class Cloth {
     private renderPipeline: GPURenderPipeline | null
     private uniformBuffer: GPUBuffer
 
+    private maxParticleMass: number
+
     constructor(device: GPUDevice, geometry: Geometry, position?: Vector3, rotation?: Vector3) {
         this.device = device
         this.geometry = geometry
-
-        this.particles = buildParticles(this.geometry)
-        this.stretchConstraints = buildStretchConstraints(this.geometry, this.particles)
-
-        logger.info(`vertices: **${this.geometry.vertices.count}**`)
-        logger.info(`triangles: **${this.geometry.topology.triangles.length}**`)
-        logger.info(`edges: **${this.geometry.topology.edges.length}**`)
-        logger.info(`stretch constraints: **${this.stretchConstraints.count}**`)
-        logger.info(`stretch compliance: **${stretchCompliance}**`)
-        logger.info(`bend compliance: **${bendCompliance}**`)
 
         this.updated = false
         this._position = vec3.zero()
@@ -55,6 +45,34 @@ export class Cloth {
 
         this.renderPipeline = null
     }
+
+    public set geometry(geometry: Geometry) {
+        this._geometry = geometry
+        this.particles = buildParticles(this._geometry)
+        this.constraints = buildConstraints(this._geometry, this.particles)
+
+        // Compute max particle mass.
+        this.maxParticleMass = 0.0
+        this.particles.forEach((particle: Particle): void => {
+            const mass = 1 / particle.inverseMass
+
+            if (mass === Infinity) return
+
+            if (mass > this.maxParticleMass) {
+                this.maxParticleMass = mass
+            }
+        })
+
+        logger.info(`vertices: **${this._geometry.vertices.count}**`)
+        logger.info(`triangles: **${this._geometry.topology.triangles.length}**`)
+        logger.info(`edges: **${this._geometry.topology.edges.length}**`)
+        logger.info(`constraints: **${this.constraints.count}**`)
+        logger.info(`max particle mass: **${this.maxParticleMass}** kg`)
+    }
+    public get geometry(): Geometry {
+        return this._geometry
+    }
+
 
     public set position(position: Vector3) {
         this._position = position
@@ -69,25 +87,27 @@ export class Cloth {
     public get rotation(): Vector3 { return this._rotation }
 
     public set wireframe(wireframe: boolean) {
-        this.geometry.wireframe = wireframe
+        this._geometry.wireframe = wireframe
         this.renderPipeline = null
     }
-    public get wireframe(): boolean { return this.geometry.wireframe }
+    public get wireframe(): boolean {
+        return this._geometry.wireframe
+    }
 
     // updatePositionsAndNormals updates the vertex positions and normals based
     // on particles positions.
     public updatePositionsAndNormals(): void {
-        this.geometry.vertices.forEach((vertex: Vertex): void => {
+        this._geometry.vertices.forEach((vertex: Vertex): void => {
             const particle = this.particles.get(vertex.id)
 
             vertex.position = particle.position
             vertex.normal = vec3.zero()
         })
 
-        for (let triangle of this.geometry.topology.triangles) {
-            const pa = this.geometry.vertices.get(triangle.a)
-            const pb = this.geometry.vertices.get(triangle.b)
-            const pc = this.geometry.vertices.get(triangle.c)
+        for (let triangle of this._geometry.topology.triangles) {
+            const pa = this._geometry.vertices.get(triangle.a)
+            const pb = this._geometry.vertices.get(triangle.b)
+            const pc = this._geometry.vertices.get(triangle.c)
 
             const papb = vec3.sub(pb.position, pa.position)
             const papc = vec3.sub(pc.position, pa.position)
@@ -99,11 +119,13 @@ export class Cloth {
             vec3.addMut(pc.normal, faceNormal)
         }
 
-        this.geometry.vertices.forEach((vertex: Vertex): void => {
+        this._geometry.vertices.forEach((vertex: Vertex): void => {
             vec3.normalizeMut(vertex.normal)
+
+            vertex.color = vertex.normal
         })
 
-        this.geometry.upload()
+        this._geometry.upload()
     }
 
     // getRenderPipeline returns the render pipeline of this object.
@@ -159,9 +181,10 @@ export class Cloth {
                 buffers: [{
                     attributes: [
                         { shaderLocation: 0, offset: 0, format: "float32x3" as const },
-                        { shaderLocation: 1, offset: 12, format: "float32x3" as const },
+                        { shaderLocation: 1, offset: 3*4, format: "float32x3" as const },
+                        { shaderLocation: 2, offset: 2*3*4, format: "float32x3" as const },
                     ],
-                    arrayStride: 4 * 3 + 4 * 3,
+                    arrayStride: 3 * 4*3,
                     stepMode: "vertex" as const
                 }]
             },
@@ -173,7 +196,7 @@ export class Cloth {
             primitive: {
                 frontFace: "cw",
                 cullMode: "none",
-                topology: this.geometry.primitive,
+                topology: this._geometry.primitive,
             },
             depthStencil: {
                 depthWriteEnabled: true,
@@ -186,8 +209,6 @@ export class Cloth {
     }
 
     private updateUniforms(): void {
-        if (!this.updated) return
-
         const data = this.computeUniform()
         this.device.queue.writeBuffer(this.uniformBuffer, 0, data, 0, data.length)
     }
@@ -239,12 +260,22 @@ function buildParticles(geometry: Geometry): Particles {
     return particles
 }
 
-function buildStretchConstraints(geometry: Geometry, particles: Particles): StretchConstraints {
-    const constraintParticles: number[][] = []
+interface constraint {
+    type: ConstraintType
+    p1: number
+    p2: number
+}
+
+function buildConstraints(geometry: Geometry, particles: Particles): Constraints {
+    const constraintParticles: constraint[] = []
 
     // Generate stretching constraints.
     for (let edge of geometry.topology.edges) {
-        constraintParticles.push([edge.start, edge.end, stretchCompliance])
+        constraintParticles.push({
+            type: ConstraintType.Stretch,
+            p1: edge.start,
+            p2: edge.end,
+        })
     }
 
     // Generate bending constraints.
@@ -277,16 +308,23 @@ function buildStretchConstraints(geometry: Geometry, particles: Particles): Stre
             p2 = t2.c
         }
 
-        constraintParticles.push([p1, p2, bendCompliance])
+        constraintParticles.push({
+            type: ConstraintType.Bend,
+            p1, p2,
+        })
     }
 
     // Shuffle constraints to prevent resonances.
     shuffle(constraintParticles)
 
-    const constraints = new StretchConstraints(constraintParticles.length)
+    const constraints = new Constraints(constraintParticles.length)
 
-    for (let [p1, p2, compliance] of constraintParticles) {
-        constraints.add(particles.get(p1), particles.get(p2), compliance)
+    for (let c of constraintParticles) {
+        if (c.type === ConstraintType.Stretch) {
+            constraints.addStretch(particles.get(c.p1), particles.get(c.p2))
+        } else {
+            constraints.addBend(particles.get(c.p1), particles.get(c.p2))
+        }
     }
 
     return constraints

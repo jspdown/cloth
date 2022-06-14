@@ -110,8 +110,8 @@ export class ParticleRef {
 }
 
 export class Particles {
-    private readonly buffer: Float32Array
-    private count: number
+    public count: number
+    public readonly buffer: Float32Array
 
     constructor(maxParticles: number) {
         this.buffer = new Float32Array(maxParticles * ParticleRef.components)

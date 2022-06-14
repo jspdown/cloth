@@ -1,26 +1,39 @@
 import * as vec3 from "../math/vector3"
 
 import {Particle, Particles} from "./particle"
+import {Method} from "./solver_cpu";
 
 const epsilon = 1e-6
 
-// StretchConstraint presents a specific part of a buffer as a stretch constraint.
-export class StretchConstraintRef {
+export interface Config {
+    method: Method
+    stretchCompliance: number
+    bendCompliance: number
+    relaxation: number
+}
+
+export enum ConstraintType {
+    Stretch,
+    Bend,
+}
+
+// ConstraintRef presents a specific part of a buffer as a constraint.
+export class ConstraintRef {
     private readonly buffer: Float32Array
     private readonly offset: number
 
     static readonly components = 4
-    static readonly p1Offset = 0
-    static readonly p2Offset = 1
-    static readonly restDistanceOffset = 2
-    static readonly complianceOffset = 3
+    static readonly typeOffset = 0
+    static readonly restValueOffset = 1
+    static readonly p1Offset = 2
+    static readonly p2Offset = 3
 
     constructor(buffer: Float32Array, offset: number) {
         this.buffer = buffer
         this.offset = offset
     }
 
-    public project(particles: Particles, dt: number, jacobi: boolean) {
+    public project(particles: Particles, dt: number, config: Config) {
         const p1 = particles.get(this.p1)
         const p2 = particles.get(this.p2)
 
@@ -29,7 +42,11 @@ export class StretchConstraintRef {
             return
         }
 
-        const alphaTilde = this.compliance / (dt * dt)
+        const compliance = this.type === ConstraintType.Stretch
+            ? config.stretchCompliance
+            : config.bendCompliance
+
+        const alphaTilde = compliance / (dt * dt)
         const p1p2 = vec3.sub(p1.estimatedPosition, p2.estimatedPosition)
 
         let distance = vec3.length(p1p2)
@@ -39,13 +56,13 @@ export class StretchConstraintRef {
 
         const grad = vec3.divideByScalar(p1p2, distance)
 
-        const c = distance - this.restDistance
-        const lagrangeMultiplier = -c / (sumInvMasses + alphaTilde) * 0.2
+        const c = distance - this.restValue
+        const lagrangeMultiplier = -c / (sumInvMasses + alphaTilde) * config.relaxation
 
         const deltaP1 = vec3.multiplyByScalar(grad, lagrangeMultiplier * p1.inverseMass)
         const deltaP2 = vec3.multiplyByScalar(grad, -lagrangeMultiplier * p2.inverseMass)
 
-        if (jacobi) {
+        if (config.method === Method.Jacobi) {
             vec3.addMut(p1.deltaPosition, deltaP1)
             vec3.addMut(p2.deltaPosition, deltaP2)
         } else {
@@ -55,68 +72,84 @@ export class StretchConstraintRef {
     }
 
     public get p1(): number {
-        return this.buffer[this.offset + StretchConstraintRef.p1Offset]
+        return this.buffer[this.offset + ConstraintRef.p1Offset]
     }
     public set p1(p1: number) {
-        this.buffer[this.offset + StretchConstraintRef.p1Offset] = p1
+        this.buffer[this.offset + ConstraintRef.p1Offset] = p1
     }
 
     public get p2(): number {
-        return this.buffer[this.offset + StretchConstraintRef.p2Offset]
+        return this.buffer[this.offset + ConstraintRef.p2Offset]
     }
     public set p2(p2: number) {
-        this.buffer[this.offset + StretchConstraintRef.p2Offset] = p2
+        this.buffer[this.offset + ConstraintRef.p2Offset] = p2
     }
 
-    public get restDistance(): number {
-        return this.buffer[this.offset + StretchConstraintRef.restDistanceOffset]
+    public get restValue(): number {
+        return this.buffer[this.offset + ConstraintRef.restValueOffset]
     }
-    public set restDistance(restDistance: number) {
-        this.buffer[this.offset + StretchConstraintRef.restDistanceOffset] = restDistance
+    public set restValue(restValue: number) {
+        this.buffer[this.offset + ConstraintRef.restValueOffset] = restValue
     }
 
-    public get compliance(): number {
-        return this.buffer[this.offset + StretchConstraintRef.complianceOffset]
+    public get type(): number {
+        return this.buffer[this.offset + ConstraintRef.typeOffset]
     }
-    public set compliance(compliance: number) {
-        this.buffer[this.offset + StretchConstraintRef.complianceOffset] = compliance
+    public set type(type: number) {
+        this.buffer[this.offset + ConstraintRef.typeOffset] = type
     }
 }
 
 // StretchConstraints wraps a buffer of stretch constraints.
-export class StretchConstraints {
+export class Constraints {
     private readonly buffer: Float32Array
     public count: number
 
     constructor(maxConstraints: number) {
-        this.buffer = new Float32Array(maxConstraints * StretchConstraintRef.components)
+        this.buffer = new Float32Array(maxConstraints * ConstraintRef.components)
         this.count = 0
     }
 
     // add adds a new stretch constraint.
-    public add(p1: Particle, p2: Particle, compliance: number) {
+    public addStretch(p1: Particle, p2: Particle) {
         if (this.count+1 >= this.buffer.length/2) {
             throw new Error("max number of constraints reached")
         }
 
-        const offset = this.count * StretchConstraintRef.components
-        const c = new StretchConstraintRef(this.buffer, offset)
+        const offset = this.count * ConstraintRef.components
+        const c = new ConstraintRef(this.buffer, offset)
 
+        c.type = ConstraintType.Stretch
+        c.restValue = vec3.distance(p1.position, p2.position)
         c.p1 = p1.id
         c.p2 = p2.id
-        c.restDistance = vec3.distance(p1.position, p2.position)
-        c.compliance = compliance
+
+        this.count++
+    }
+
+    public addBend(p1: Particle, p2: Particle) {
+        if (this.count+1 >= this.buffer.length/2) {
+            throw new Error("max number of constraints reached")
+        }
+
+        const offset = this.count * ConstraintRef.components
+        const c = new ConstraintRef(this.buffer, offset)
+
+        c.type = ConstraintType.Bend
+        c.restValue = vec3.distance(p1.position, p2.position)
+        c.p1 = p1.id
+        c.p2 = p2.id
 
         this.count++
     }
 
     // project projects all the constraints on the given particles.
-    public project(particles: Particles, dt: number, jacobi: boolean) {
+    public project(particles: Particles, dt: number, config: Config) {
         for (let i = 0; i < this.count; i++) {
-            const offset = i * StretchConstraintRef.components
-            const constraint = new StretchConstraintRef(this.buffer, offset)
+            const offset = i * ConstraintRef.components
+            const constraint = new ConstraintRef(this.buffer, offset)
 
-            constraint.project(particles, dt, jacobi)
+            constraint.project(particles, dt, config)
         }
     }
 }

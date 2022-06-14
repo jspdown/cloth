@@ -1,17 +1,27 @@
 import solverShaderCode from "../shaders/solver.compute.wgsl"
+import {logger, render} from "../logger";
+import {Cloth} from "./cloth";
 
 const maxParticles = 100000
 const particleSizeBytes = 9
 
 
-// SolverConfig holds the configuration of the solver.
-interface SolverConfig {
-    subSteps: number
+// Config holds the configuration of the solver.
+export interface Config {
+    deltaTime?: number
+    subSteps?: number
+}
+
+export interface Indexable {
+    [key: string]: any;
 }
 
 // Solver is a XPBD physic solver.
 export class Solver {
-    private readonly config: SolverConfig
+    public paused: boolean
+
+    private _config: Config
+
     private readonly device: GPUDevice
 
     private readonly particlesBindGroup: GPUBindGroup
@@ -22,7 +32,12 @@ export class Solver {
     private readonly gpuInputParticlesBuffer: GPUBuffer
     private readonly gpuOutputParticlesBuffer: GPUBuffer
 
-    constructor(device: GPUDevice, config: SolverConfig) {
+    static defaultConfig: Config = {
+        deltaTime: 1/60,
+        subSteps: 10,
+    }
+
+    constructor(device: GPUDevice, config: Config) {
         this.config = config
         this.device = device
 
@@ -70,13 +85,13 @@ export class Solver {
     }
 
     // solve solves a simulation step.
-    public solve(deltaTime: number, particles: Float32Array): void {
-        const deltaTimeStep = deltaTime / this.config.subSteps
+    public solve(cloth: Cloth): void {
+        const deltaTimeStep = this._config.deltaTime / this._config.subSteps
 
-        const particlesCount = particles.length / particleSizeBytes
+        const particlesCount = cloth.particles.count
         const config = new Float32Array([particlesCount])
 
-        this.device.queue.writeBuffer(this.gpuInputParticlesBuffer, 0, particles, 0, particles.length)
+        this.device.queue.writeBuffer(this.gpuInputParticlesBuffer, 0, cloth.particles.buffer, 0, cloth.particles.buffer.length)
         this.device.queue.writeBuffer(this.configBuffer, 0, config, 0, config.length)
 
         const encoder = this.device.createCommandEncoder()
@@ -88,7 +103,7 @@ export class Solver {
             this.updatePositionsAndVelocities(deltaTimeStep)
         }
 
-        const readLength = fourBytesAlignment(4 * particles.length)
+        const readLength = fourBytesAlignment(4 * cloth.particles.buffer.length)
         const gpuReadBuffer = this.device.createBuffer({
           size: readLength,
           usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ
@@ -132,6 +147,29 @@ export class Solver {
     // updatePositionsAndVelocities updates particle positions and velocities using the
     // estimated position refined by the constraints.
     private updatePositionsAndVelocities(deltaTime: number): void {}
+
+
+        public set config(config: Config) {
+        const cfg: Config = {
+            ...Solver.defaultConfig,
+            ...config
+        }
+
+        Object.keys(cfg).forEach((prop: string) => {
+            const oldValue = (this._config as Indexable)[prop]
+            const newValue = (cfg as Indexable)[prop]
+
+            if (newValue !== oldValue) {
+                logger.info(`${prop}: **${render(newValue)}**`)
+            }
+        })
+
+        this._config = cfg
+    }
+
+    public get config(): Config {
+        return this._config
+    }
 }
 
 function fourBytesAlignment(size: number): number {

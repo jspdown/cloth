@@ -6,6 +6,7 @@ export interface Vertex {
     id?: number
     position: Vector3
     normal: Vector3
+    color: Vector3
 }
 
 export class Vector3Ref {
@@ -35,7 +36,8 @@ export class VertexRef {
 
     static readonly positionOffset = 0
     static readonly normalOffset = 3
-    static readonly components = 6
+    static readonly colorOffset = 6
+    static readonly components = 9
 
     constructor(id: number, buffer: Float32Array, offset: number) {
         this.id = id
@@ -68,6 +70,19 @@ export class VertexRef {
         this.buffer[offset+1] = normal.y
         this.buffer[offset+2] = normal.z
     }
+
+    get color(): Vector3 {
+        const offset = this.offset + VertexRef.colorOffset
+
+        return new Vector3Ref(this.buffer, offset)
+    }
+    set color(color: Vector3) {
+        const offset = this.offset + VertexRef.colorOffset
+
+        this.buffer[offset] = color.x
+        this.buffer[offset+1] = color.y
+        this.buffer[offset+2] = color.z
+    }
 }
 
 export class VertexBuffer {
@@ -87,6 +102,7 @@ export class VertexBuffer {
 
         p.position = vertex.position
         p.normal = vertex.normal
+        p.color = vertex.color
 
         this.count++
     }

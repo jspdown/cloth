@@ -45,11 +45,10 @@ class Monitor {
     private el: HTMLElement
     private timers: Timer[]
 
-    constructor() {
-        const monitorEl = document.getElementById("monitor")
+    public attach(el: HTMLElement): void {
         const ulEl = document.createElement("ul")
 
-        monitorEl.appendChild(ulEl)
+        el.appendChild(ulEl)
 
         this.el = ulEl
 
@@ -74,4 +73,4 @@ class Monitor {
     }
 }
 
-export default new Monitor()
+export const monitor = new Monitor()

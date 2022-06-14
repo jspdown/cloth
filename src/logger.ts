@@ -5,20 +5,23 @@ interface Log {
     message: string
 }
 
-const strongRe = /(\*\*(.+)\*\*)/g
-
 class Logger {
     private pending: Log[]
-    private logEl: HTMLElement
+    private el: HTMLElement
 
     constructor() {
         this.pending = []
-        this.logEl = document.getElementById("log")
+    }
+
+    attach(el: HTMLElement): void {
+        this.el = el
 
         setInterval(() => this.flush(), renderInterval)
     }
 
     flush() {
+        if (!this.pending.length) return
+
         this.pending.forEach(log => {
             const p = document.createElement("p")
             const date = log.date.toLocaleTimeString("en-US", {
@@ -31,10 +34,10 @@ class Logger {
             const message = this.replaceStrongMarkers(log.message)
             p.innerHTML = `<span class="date">${date}&nbsp&nbsp</span><span class="message">${message}</span>`
 
-            this.logEl.appendChild(p)
+            this.el.appendChild(p)
         })
 
-        this.logEl.scrollTop = this.logEl.scrollHeight;
+        this.el.scrollTop = this.el.scrollHeight;
         this.pending = []
     }
 
@@ -75,4 +78,14 @@ class Logger {
     }
 }
 
-export default new Logger()
+export const logger = new Logger()
+
+
+export function render(data: any): string {
+    const typ = typeof data
+    if (typ === "object") {
+        return JSON.stringify(data)
+    }
+
+    return data.toString()
+}

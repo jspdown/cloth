@@ -1,6 +1,7 @@
 import * as vec3 from "./math/vector3"
 
 import {VertexBuffer} from "./vertex"
+import {logger} from "./logger";
 
 const vertexComponents = 6
 const vertexPositionOffset = 0
@@ -201,6 +202,8 @@ export function buildPlaneGeometry(device: GPUDevice, width: number, height: num
     const widthStep = width / widthDivisions
     const heightStep = height / widthDivisions
 
+    logger.info(`plane geometry: size=(**${width}**, **${height}**) divisions=(**${widthDivisions}**, **${heightDivisions}**)`)
+
     const triangles = 2 * heightDivisions * widthDivisions
     const vertices = new VertexBuffer((heightDivisions + 1) * (widthDivisions + 1))
     const indices = new Uint16Array(3 * triangles)
@@ -211,6 +214,7 @@ export function buildPlaneGeometry(device: GPUDevice, width: number, height: num
             vertices.add({
                 position: vec3.create(i * widthStep, 0, j * heightStep),
                 normal: vec3.create(0, 1, 0),
+                color: vec3.create(0, 1, 0),
             })
 
             // Generate triangle indices following this pattern:

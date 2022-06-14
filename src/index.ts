@@ -1,5 +1,7 @@
 import {App} from "./app"
-import logger from "./logger"
+import {logger} from "./logger"
+import {monitor} from "./monitor"
+import {Controller} from "./controller"
 
 async function main() {
     const gpu: GPU = navigator.gpu
@@ -16,11 +18,16 @@ async function main() {
     canvas.height = 512
 
     const app = new App(canvas, device)
+    const controller = new Controller(device, app)
+
+    logger.attach(document.getElementById("logger"))
+    monitor.attach(document.getElementById("monitor"))
+    controller.attach(document.getElementById("controller"))
 
     return app.run()
 }
 
 main()
     .then(() => logger.info("done"))
-    .catch(err => logger.error(err.toString()))
+    .catch(err => console.error(err.toString() + "\n" + err.stack))
 
