@@ -97,6 +97,8 @@ export class Controller {
         const playButton = document.getElementById("play")
         const restartButton = document.getElementById("restart")
         const applyButton = document.getElementById("apply")
+        const solverTypeInput = document.getElementById("solver-type")
+        const cpuMethodInput = document.getElementById("cpu-method")
 
         playButton.addEventListener("click", (e) => {
             e.preventDefault()
@@ -112,6 +114,14 @@ export class Controller {
             e.preventDefault()
 
             this.apply()
+        })
+
+        solverTypeInput.addEventListener("change", () => {
+            this.config = this.buildConfiguration()
+        })
+
+        cpuMethodInput && cpuMethodInput.addEventListener("change", () => {
+            this.config = this.buildConfiguration()
         })
     }
 
@@ -215,6 +225,18 @@ export class Controller {
     }
 
     private renderCPUSolverForm(): string {
+        const jacobiFields = `
+            <div>
+                <label for="cpu-relaxation">
+                        <span>relaxation</span>
+                        <input type="number" id="cpu-relaxation" name="cpu-relaxation"
+                            value=${this.config.cpuSolver.relaxation}
+                            step=0.05
+                            min=0
+                            max=2 />
+                </label>
+            </div>
+        `
         return `
             <div>
                 <label for="cpu-method">
@@ -233,14 +255,7 @@ export class Controller {
                         max=500 />
                 </label>
 
-                <label for="cpu-relaxation">
-                    <span>relaxation</span>
-                    <input type="number" id="cpu-relaxation" name="cpu-relaxation"
-                        value=${this.config.cpuSolver.relaxation}
-                        step=0.05
-                        min=0
-                        max=2 />
-                </label>
+                ${this.config.cpuSolver.method === cpuSolver.Method.Jacobi ? jacobiFields : ""}
             </div>
         `
     }
@@ -326,17 +341,20 @@ export class Controller {
             }
         }
 
-        if (config.solverType === SolverType.CPU) {
+        if (this.config.solverType === SolverType.CPU) {
             config.cpuSolver = {
                 ...this.config.cpuSolver,
 
-                subSteps: parseInt(data.get("cpu-sub-steps") as string),
-                relaxation: parseFloat(data.get("cpu-relaxation") as string),
                 method: data.get("cpu-method") as cpuSolver.Method,
+                subSteps: parseInt(data.get("cpu-sub-steps") as string),
+            }
+
+            if (this.config.cpuSolver.method === cpuSolver.Method.Jacobi) {
+                config.cpuSolver.relaxation = parseFloat(data.get("cpu-relaxation") as string)
             }
         }
 
-        if (config.solverType === SolverType.GPU) {
+        if (this.config.solverType === SolverType.GPU) {
             config.gpuSolver = {
                 ...this.config.gpuSolver,
 
