@@ -15,10 +15,14 @@ interface Config {
 }
 
 interface ClothConfig {
+    unit: number
+    density: number
     width: number
     height: number
     widthDivisions: number
     heightDivisions: number
+    stretchCompliance: number
+    bendCompliance: number
 }
 
 enum SolverType {
@@ -47,19 +51,21 @@ export class Controller {
             cpuSolver: {
                 deltaTime: 1/60,
                 subSteps: 15,
-                stretchCompliance: 0,
-                bendCompliance: 0.3,
-                relaxation: 0.2,
+                relaxation: 1,
                 method: cpuSolver.Method.GaussSeidel,
             },
             gpuSolver: {
                 subSteps: 10,
             },
             cloth: {
+                unit: 0.01,
+                density: 0.270,
                 width: 10,
                 height: 10,
                 widthDivisions: 40,
                 heightDivisions: 40,
+                stretchCompliance: 0,
+                bendCompliance: 0.3,
             },
         }
     }
@@ -93,7 +99,6 @@ export class Controller {
         const applyButton = document.getElementById("apply")
 
         playButton.addEventListener("click", (e) => {
-            console.log("click!")
             e.preventDefault()
             this.togglePlay()
         })
@@ -115,6 +120,22 @@ export class Controller {
             <form>
                 <div>
                     <div class="column">
+                        <label for="cloth-unit">
+                            <span>unit</span>
+                            <input type="number" id="cloth-unit" name="cloth-unit"
+                                value=${this.config.cloth.unit}
+                                step=0.001
+                                min=0.000001
+                                max=1000 />
+                        </label>
+                        <label for="cloth-density">
+                            <span>density</span>
+                            <input type="number" id="cloth-density" name="cloth-density"
+                                value=${this.config.cloth.density}
+                                step=0.001
+                                min=0.000001
+                                max=1000 />
+                        </label>
                         <label for="cloth-width">
                             <span>width</span>
                             <input type="number" id="cloth-width" name="cloth-width"
@@ -149,6 +170,26 @@ export class Controller {
                                 max=500 />
                         </label>
 
+                        <label for="cloth-stretch-compliance">
+                            <span>stretch compliance</span>
+                            <input type="number" id="cloth-stretch-compliance" name="cloth-stretch-compliance"
+                                value=${this.config.cloth.stretchCompliance}
+                                step=0.1
+                                min=0
+                                max=1 />
+                        </label>
+
+                        <label for="cloth-bend-compliance">
+                            <span>bend compliance</span>
+                            <input type="number" id="cloth-bend-compliance" name="cloth-bend-compliance"
+                                value=${this.config.cloth.bendCompliance}
+                                step=0.1
+                                min=0
+                                max=1 />
+                        </label>
+                    </div>
+
+                    <div class="column">
                         <label for="solver-type">
                             <span>solver type</span>
                             <select id="solver-type" name="solver-type">
@@ -156,12 +197,12 @@ export class Controller {
                                 <option ${this.config.solverType === SolverType.GPU ? "selected" : ""} value=${SolverType.GPU}>GPU</option>
                             </select>
                         </label>
-                    </div>
 
-                    ${this.config.solverType === SolverType.CPU
-                        ? this.renderCPUSolverForm()
-                        : this.renderGPUSolverForm()
-                    }
+                        ${this.config.solverType === SolverType.CPU
+                            ? this.renderCPUSolverForm()
+                            : this.renderGPUSolverForm()
+                        }
+                    </div>
                 </div>
 
                 <div class="row">
@@ -175,7 +216,7 @@ export class Controller {
 
     private renderCPUSolverForm(): string {
         return `
-            <div class="column">
+            <div>
                 <label for="cpu-method">
                     <span>method</span>
                     <select id="cpu-method" name="cpu-method">
@@ -192,24 +233,6 @@ export class Controller {
                         max=500 />
                 </label>
 
-                <label for="cpu-stretch-compliance">
-                    <span>stretch compliance</span>
-                    <input type="number" id="cpu-stretch-compliance" name="cpu-stretch-compliance"
-                        value=${this.config.cpuSolver.stretchCompliance}
-                        step=0.1
-                        min=0
-                        max=1 />
-                </label>
-
-                <label for="cpu-bend-compliance">
-                    <span>bend compliance</span>
-                    <input type="number" id="cpu-bend-compliance" name="cpu-bend-compliance"
-                        value=${this.config.cpuSolver.bendCompliance}
-                        step=0.1
-                        min=0
-                        max=1 />
-                </label>
-
                 <label for="cpu-relaxation">
                     <span>relaxation</span>
                     <input type="number" id="cpu-relaxation" name="cpu-relaxation"
@@ -224,7 +247,7 @@ export class Controller {
 
     private renderGPUSolverForm(): string {
         return `
-            <div class="column">
+            <div>
                 <label for="gpu-sub-steps">
                     <span>sub-steps</span>
                     <input type="number" id="gpu-sub-steps" name="gpu-sub-steps"
@@ -239,13 +262,17 @@ export class Controller {
 
     private updateApp(config: Config, forced: boolean = false) {
         const solverTypeChanged = config.solverType !== this.config.solverType
-        const clothConfigChanged = config.cloth.width !== this.config.cloth.width
+        const clothGeometryChanged = config.cloth.width !== this.config.cloth.width
             || config.cloth.height !== this.config.cloth.height
             || config.cloth.widthDivisions !== this.config.cloth.widthDivisions
             || config.cloth.heightDivisions !== this.config.cloth.heightDivisions
+        const clothConfigChanged = config.cloth.stretchCompliance !== this.config.cloth.stretchCompliance
+            || config.cloth.bendCompliance !== this.config.cloth.bendCompliance
+            || config.cloth.unit !== this.config.cloth.unit
+            || config.cloth.density !== this.config.cloth.density
 
-        if (forced || clothConfigChanged) {
-            logger.info("resetting the simulation with a new cloth geometry...")
+        if (forced || clothGeometryChanged) {
+            logger.info("resetting the simulation with a new cloth geometry")
 
             this.app.cloth.geometry = buildPlaneGeometry(this.device,
                 config.cloth.width,
@@ -254,17 +281,25 @@ export class Controller {
                 config.cloth.heightDivisions)
         }
 
+        if (forced || clothConfigChanged) {
+            this.app.cloth.config = {
+                unit: config.cloth.unit,
+                density: config.cloth.density,
+                stretchCompliance: config.cloth.stretchCompliance,
+                bendCompliance: config.cloth.bendCompliance,
+            }
+        }
+
         if (config.solverType === SolverType.CPU) {
             if (forced || solverTypeChanged) {
-                logger.info("switching to CPU solver...")
+                logger.info("switching to CPU solver")
                 this.app.solver = new cpuSolver.Solver(config.cpuSolver)
             } else {
-                console.log()
                 this.app.solver.config = config.cpuSolver
             }
         } else {
             if (forced || solverTypeChanged) {
-                logger.info("switching to GPU solver...")
+                logger.info("switching to GPU solver")
                 this.app.solver = new gpuSolver.Solver(this.device, config.gpuSolver)
             } else {
                 this.app.solver.config = config.gpuSolver
@@ -280,10 +315,14 @@ export class Controller {
 
             solverType: data.get("solver-type") as SolverType,
             cloth: {
+                unit: parseFloat(data.get("cloth-unit") as string),
+                density: parseFloat(data.get("cloth-density") as string),
                 width: parseFloat(data.get("cloth-width") as string),
                 height: parseFloat(data.get("cloth-height") as string),
                 widthDivisions: parseInt(data.get("cloth-width-divisions") as string),
                 heightDivisions: parseInt(data.get("cloth-height-divisions") as string),
+                stretchCompliance: parseFloat(data.get("cloth-stretch-compliance") as string),
+                bendCompliance: parseFloat(data.get("cloth-bend-compliance") as string),
             }
         }
 
@@ -292,8 +331,6 @@ export class Controller {
                 ...this.config.cpuSolver,
 
                 subSteps: parseInt(data.get("cpu-sub-steps") as string),
-                stretchCompliance: parseFloat(data.get("cpu-stretch-compliance") as string),
-                bendCompliance: parseFloat(data.get("cpu-bend-compliance") as string),
                 relaxation: parseFloat(data.get("cpu-relaxation") as string),
                 method: data.get("cpu-method") as cpuSolver.Method,
             }

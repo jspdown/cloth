@@ -9,11 +9,19 @@ import {Geometry} from "../geometry"
 import {Camera} from "../camera"
 import {Vertex} from "../vertex"
 import {Particle, Particles} from "./particle"
-import {ConstraintType, Constraints} from "./constraint"
-import {logger} from "../logger"
+import {Constraints} from "./constraint"
+import {logger, render} from "../logger"
 
-const unit = 0.01
-const density = 0.270
+interface Indexable {
+    [key: string]: any;
+}
+
+export interface ClothConfig {
+    unit?: number
+    density?: number
+    stretchCompliance?: number
+    bendCompliance?: number
+}
 
 // Cloth holds a cloth mesh.
 export class Cloth {
@@ -26,13 +34,24 @@ export class Cloth {
     private _rotation: Vector3
     private updated: boolean
 
+    private _config: ClothConfig
     private device: GPUDevice
     private renderPipeline: GPURenderPipeline | null
     private uniformBuffer: GPUBuffer
 
-    private maxParticleMass: number
+    static defaultConfig: ClothConfig = {
+        unit: 0.01,
+        density: 0.270,
+        stretchCompliance: 0,
+        bendCompliance: 0.3,
+    }
 
-    constructor(device: GPUDevice, geometry: Geometry, position?: Vector3, rotation?: Vector3) {
+    constructor(device: GPUDevice, geometry: Geometry, config: ClothConfig, position?: Vector3, rotation?: Vector3) {
+        this._config = {
+            ...Cloth.defaultConfig,
+            ...config
+        }
+
         this.device = device
         this.geometry = geometry
 
@@ -48,31 +67,53 @@ export class Cloth {
 
     public set geometry(geometry: Geometry) {
         this._geometry = geometry
-        this.particles = buildParticles(this._geometry)
-        this.constraints = buildConstraints(this._geometry, this.particles)
-
-        // Compute max particle mass.
-        this.maxParticleMass = 0.0
-        this.particles.forEach((particle: Particle): void => {
-            const mass = 1 / particle.inverseMass
-
-            if (mass === Infinity) return
-
-            if (mass > this.maxParticleMass) {
-                this.maxParticleMass = mass
-            }
-        })
+        this.particles = buildParticles(this._geometry, this._config.unit, this._config.density)
+        this.constraints = buildConstraints(this._geometry, this.particles, this._config.stretchCompliance, this._config.bendCompliance)
 
         logger.info(`vertices: **${this._geometry.vertices.count}**`)
         logger.info(`triangles: **${this._geometry.topology.triangles.length}**`)
         logger.info(`edges: **${this._geometry.topology.edges.length}**`)
         logger.info(`constraints: **${this.constraints.count}**`)
-        logger.info(`max particle mass: **${this.maxParticleMass}** kg`)
     }
     public get geometry(): Geometry {
         return this._geometry
     }
 
+    public set config(config: ClothConfig) {
+        const cfg: ClothConfig = {
+            ...Cloth.defaultConfig,
+            ...config
+        }
+
+        const particlesNeedsUpdate = cfg.unit !== this._config.unit
+            || cfg.density !== this._config.density
+        const constraintsNeedsUpdate = cfg.stretchCompliance !== this._config.stretchCompliance
+            || cfg.bendCompliance !== this._config.bendCompliance
+            || cfg.density
+
+        if (!constraintsNeedsUpdate && !particlesNeedsUpdate) return
+
+        Object.keys(cfg).forEach((prop: string) => {
+            const oldValue = (this._config as Indexable)[prop]
+            const newValue = (cfg as Indexable)[prop]
+
+            if (newValue !== oldValue) {
+                logger.info(`${prop}: **${render(newValue)}**`)
+            }
+        })
+
+        if (particlesNeedsUpdate) {
+            this.particles = buildParticles(this._geometry, cfg.unit, cfg.density)
+        }
+        if (constraintsNeedsUpdate) {
+            this.constraints = buildConstraints(this._geometry, this.particles, cfg.stretchCompliance, cfg.bendCompliance)
+        }
+
+        this._config = cfg
+    }
+    public get config(): ClothConfig {
+        return this._config
+    }
 
     public set position(position: Vector3) {
         this._position = position
@@ -221,7 +262,7 @@ export class Cloth {
     }
 }
 
-function buildParticles(geometry: Geometry): Particles {
+function buildParticles(geometry: Geometry, unit: number, density: number): Particles {
     const particles = new Particles(geometry.vertices.count)
 
     geometry.vertices.forEach((vertex: Vertex) => {
@@ -262,18 +303,18 @@ function buildParticles(geometry: Geometry): Particles {
 }
 
 interface constraint {
-    type: ConstraintType
+    compliance: number
     p1: number
     p2: number
 }
 
-function buildConstraints(geometry: Geometry, particles: Particles): Constraints {
+function buildConstraints(geometry: Geometry, particles: Particles, stretchCompliance: number, bendCompliance: number): Constraints {
     const constraintParticles: constraint[] = []
 
     // Generate stretching constraints.
     for (let edge of geometry.topology.edges) {
         constraintParticles.push({
-            type: ConstraintType.Stretch,
+            compliance: stretchCompliance,
             p1: edge.start,
             p2: edge.end,
         })
@@ -310,7 +351,7 @@ function buildConstraints(geometry: Geometry, particles: Particles): Constraints
         }
 
         constraintParticles.push({
-            type: ConstraintType.Bend,
+            compliance: bendCompliance,
             p1, p2,
         })
     }
@@ -319,13 +360,8 @@ function buildConstraints(geometry: Geometry, particles: Particles): Constraints
     shuffle(constraintParticles)
 
     const constraints = new Constraints(constraintParticles.length)
-
     for (let c of constraintParticles) {
-        if (c.type === ConstraintType.Stretch) {
-            constraints.addStretch(particles.get(c.p1), particles.get(c.p2))
-        } else {
-            constraints.addBend(particles.get(c.p1), particles.get(c.p2))
-        }
+        constraints.add(particles.get(c.p1), particles.get(c.p2), c.compliance)
     }
 
     return constraints

@@ -15,13 +15,11 @@ export interface Config {
     deltaTime?: number
     subSteps?: number
     gravity?: Vector3
-    stretchCompliance?: number
-    bendCompliance?: number
     relaxation?: number
     method?: Method
 }
 
-export interface Indexable {
+interface Indexable {
     [key: string]: any;
 }
 
@@ -35,9 +33,7 @@ export class Solver {
         deltaTime: 1/60,
         subSteps: 10,
         gravity: vec3.create(0, -9.8, 0),
-        stretchCompliance: 0,
-        bendCompliance: 0.3,
-        relaxation: 0.2,
+        relaxation: 1,
         method: Method.GaussSeidel,
     }
 
@@ -64,11 +60,7 @@ export class Solver {
                 particle.estimatedPosition = vec3.add(particle.position, vec3.multiplyByScalar(particle.velocity, dt))
             })
 
-            cloth.constraints.project(cloth.particles, dt, {
-                method: this._config.method,
-                stretchCompliance: this._config.stretchCompliance,
-                bendCompliance: this._config.bendCompliance,
-            })
+            cloth.constraints.project(cloth.particles, dt, this._config.method)
 
             cloth.particles.forEach((particle: Particle): void => {
                  if (this._config.method === Method.Jacobi) {

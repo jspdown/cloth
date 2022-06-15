@@ -25,8 +25,6 @@ export class App {
     private readonly device: GPUDevice
     private readonly canvas: HTMLCanvasElement
     private readonly camera: Camera
-    private readonly controller: Controller
-
     private readonly renderer: Renderer
 
     private stopped: boolean
@@ -45,15 +43,16 @@ export class App {
         this.solver = new cpuSolver.Solver({
             deltaTime: 1/60,
             subSteps: 15,
-            stretchCompliance: 0,
-            bendCompliance: 0.3,
-            relaxation: 0.2,
+            relaxation: 1,
             method: cpuSolver.Method.GaussSeidel,
         })
 
          const geometry = buildPlaneGeometry(this.device, 10, 10, 30, 30)
 
-        this.cloth = new Cloth(this.device, geometry, vec3.create(-5, 0, 0))
+        this.cloth = new Cloth(this.device, geometry, {
+            stretchCompliance: 0,
+            bendCompliance: 0.3,
+        }, vec3.create(-5, 0, 0))
     }
 
     // run runs the application.

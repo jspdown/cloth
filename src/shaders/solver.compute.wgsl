@@ -4,12 +4,18 @@ struct Config {
 
 struct Particle {
     position: vec3<f32>,
-    velocity: vec3<f32>,
     inverseMass: f32,
 }
 
-@group(0) @binding(0) var<storage, read> inputParticles: array<Particle>;
-@group(0) @binding(1) var<storage, write> outputParticles: array<Particle>;
+struct Constraint {
+    p1: int32
+    p2: int32,
+    restValue: f32,
+    compliance: f32,
+}
+
+@group(0) @binding(0) var<storage, read> particles: array<Particle>;
+@group(0) @binding(1) var<storage, write> deltaPositions: array<vec3<f32>>;
 @group(1) @binding(0) var<uniform> config: Config;
 
 @stage(compute) @workgroup_size(8, 1)
@@ -19,6 +25,6 @@ fn main(@builtin(global_invocation_id) global_id : vec3<u32>) {
         return;
     }
 
-    var input = inputParticles[global_id.x].position;
-    outputParticles[global_id.x].position = vec3<f32>(f32(global_id.x), f32(global_id.y), input.z);
+    var position = particles[global_id.x].position;
+    deltaPositions[global_id.x] = vec3(position.x*0.0, position.y*0.0, position.z*0.0)
 }
