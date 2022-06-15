@@ -9,7 +9,6 @@ export interface Config {
     method: Method
     stretchCompliance: number
     bendCompliance: number
-    relaxation: number
 }
 
 export enum ConstraintType {
@@ -57,7 +56,7 @@ export class ConstraintRef {
         const grad = vec3.divideByScalar(p1p2, distance)
 
         const c = distance - this.restValue
-        const lagrangeMultiplier = -c / (sumInvMasses + alphaTilde) * config.relaxation
+        const lagrangeMultiplier = -c / (sumInvMasses + alphaTilde)
 
         const deltaP1 = vec3.multiplyByScalar(grad, lagrangeMultiplier * p1.inverseMass)
         const deltaP2 = vec3.multiplyByScalar(grad, -lagrangeMultiplier * p2.inverseMass)
@@ -124,6 +123,9 @@ export class Constraints {
         c.p1 = p1.id
         c.p2 = p2.id
 
+        p1.constraintCount++
+        p2.constraintCount++
+
         this.count++
     }
 
@@ -139,6 +141,9 @@ export class Constraints {
         c.restValue = vec3.distance(p1.position, p2.position)
         c.p1 = p1.id
         c.p2 = p2.id
+
+        p1.constraintCount++
+        p2.constraintCount++
 
         this.count++
     }

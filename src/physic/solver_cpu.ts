@@ -65,16 +65,19 @@ export class Solver {
             })
 
             cloth.constraints.project(cloth.particles, dt, {
-                method: this.config.method,
-                stretchCompliance: this.config.stretchCompliance,
-                bendCompliance: this.config.bendCompliance,
-                relaxation: this.config.relaxation
+                method: this._config.method,
+                stretchCompliance: this._config.stretchCompliance,
+                bendCompliance: this._config.bendCompliance,
             })
 
             cloth.particles.forEach((particle: Particle): void => {
                  if (this._config.method === Method.Jacobi) {
-                    vec3.addMut(particle.estimatedPosition, particle.deltaPosition)
-                    particle.deltaPosition = vec3.zero()
+                     if (!particle.constraintCount) return
+
+                     vec3.multiplyByScalarMut(particle.deltaPosition, this._config.relaxation/particle.constraintCount)
+                     vec3.addMut(particle.estimatedPosition, particle.deltaPosition)
+
+                     particle.deltaPosition = vec3.zero()
                 }
 
                 particle.velocity = vec3.multiplyByScalar(vec3.sub(particle.estimatedPosition, particle.position), idt)

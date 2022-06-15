@@ -9,6 +9,7 @@ export interface Particle {
     deltaPosition: Vector3
     velocity: Vector3
     inverseMass: number
+    constraintCount: number
 }
 
 export class Vector3Ref {
@@ -41,7 +42,8 @@ export class ParticleRef {
     static readonly deltaPositionOffset = 6
     static readonly velocityOffset = 9
     static readonly inverseMassOffset = 12
-    static readonly components = 13
+    static readonly constraintCountOffset = 13
+    static readonly components = 14
 
     constructor(id: number, buffer: Float32Array, offset: number) {
         this.id = id
@@ -106,6 +108,13 @@ export class ParticleRef {
     }
     set inverseMass(inverseMass: number) {
         this.buffer[this.offset + ParticleRef.inverseMassOffset] = inverseMass
+    }
+
+    get constraintCount(): number {
+        return this.buffer[this.offset + ParticleRef.constraintCountOffset]
+    }
+    set constraintCount(constraintCount: number) {
+        this.buffer[this.offset + ParticleRef.constraintCountOffset] = constraintCount
     }
 }
 

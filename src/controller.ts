@@ -330,5 +330,6 @@ export class Controller {
     private togglePlay(): void {
         this.config.paused = !this.config.paused
         this.app.solver.paused = this.config.paused
+        this.renderNeeded = true
     }
 }

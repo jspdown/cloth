@@ -231,6 +231,7 @@ function buildParticles(geometry: Geometry): Particles {
             estimatedPosition: vec3.zero(),
             deltaPosition: vec3.zero(),
             inverseMass: 0.0,
+            constraintCount: 0,
         })
     })
 
