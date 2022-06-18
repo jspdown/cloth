@@ -26,6 +26,10 @@ export class Vector3Ref {
 
     get z(): number { return this.buffer[this.offset+2] }
     set z(z: number) { this.buffer[this.offset+2] = z }
+
+    public toString = (): string => {
+        return `(${this.x}, ${this.y}, ${this.z})`
+    }
 }
 
 export class VertexRef {
@@ -89,8 +93,8 @@ export class VertexBuffer {
     public readonly buffer: Float32Array
     public count: number
 
-    constructor(maxParticles: number) {
-        this.buffer = new Float32Array(maxParticles * VertexRef.components)
+    constructor(maxVertices: number) {
+        this.buffer = new Float32Array(maxVertices * VertexRef.components)
         this.count = 0
     }
 

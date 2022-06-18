@@ -31,7 +31,10 @@ class Logger {
                 second: "2-digit",
             })
 
-            const message = this.replaceStrongMarkers(log.message)
+            let message = log.message
+            message = this.replaceCarriageReturns(message)
+            message = this.replaceStrongMarkers(message)
+
             p.innerHTML = `<span class="date">${date}&nbsp&nbsp</span><span class="message">${message}</span>`
 
             this.el.appendChild(p)
@@ -39,6 +42,10 @@ class Logger {
 
         this.el.scrollTop = this.el.scrollHeight;
         this.pending = []
+    }
+
+    replaceCarriageReturns(str: string): string {
+        return str.replace(/\n/g, "<br/>")
     }
 
     replaceStrongMarkers(str: string): string {

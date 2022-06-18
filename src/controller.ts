@@ -1,5 +1,5 @@
-import * as cpuSolver from "./physic/solver_cpu"
-import * as gpuSolver from "./physic/solver_gpu"
+import {CPUSolver, CPUSolverConfig, CPUSolverMethod} from "./physic/cpu_solver"
+import {GPUSolver, GPUSolverConfig} from "./physic/gpu_solver"
 import {buildPlaneGeometry} from "./geometry"
 import {logger} from "./logger"
 import {App} from "./app"
@@ -8,8 +8,8 @@ interface Config {
     paused: boolean
     solverType: SolverType
 
-    cpuSolver: cpuSolver.Config
-    gpuSolver: gpuSolver.Config
+    cpuSolver: CPUSolverConfig
+    gpuSolver: GPUSolverConfig
 
     cloth: ClothConfig
 }
@@ -33,37 +33,41 @@ enum SolverType {
 export class Controller {
     private readonly app: App
     private readonly device: GPUDevice
+    private readonly limits: GPUSupportedLimits
 
     private config: Config
     private renderNeeded: boolean
 
     private el: HTMLElement
 
-    constructor(device: GPUDevice, app: App) {
+    constructor(app: App, device: GPUDevice, limits: GPUSupportedLimits) {
         this.app = app
         this.device = device
+        this.limits = limits
 
         this.renderNeeded = true
 
         this.config = {
             paused: true,
-            solverType: SolverType.CPU,
+            solverType: SolverType.GPU,
             cpuSolver: {
                 deltaTime: 1/60,
                 subSteps: 15,
                 relaxation: 1,
-                method: cpuSolver.Method.GaussSeidel,
+                method: CPUSolverMethod.GaussSeidel,
             },
             gpuSolver: {
+                deltaTime: 1/60,
                 subSteps: 10,
+                relaxation: 1,
             },
             cloth: {
                 unit: 0.01,
                 density: 0.270,
                 width: 10,
                 height: 10,
-                widthDivisions: 40,
-                heightDivisions: 40,
+                widthDivisions: 1,
+                heightDivisions: 1,
                 stretchCompliance: 0,
                 bendCompliance: 0.3,
             },
@@ -242,8 +246,8 @@ export class Controller {
                 <label for="cpu-method">
                     <span>method</span>
                     <select id="cpu-method" name="cpu-method">
-                        <option ${this.config.cpuSolver.method === cpuSolver.Method.Jacobi ? "selected" : ""} value=${cpuSolver.Method.Jacobi}>Jacobi</option>
-                        <option ${this.config.cpuSolver.method === cpuSolver.Method.GaussSeidel ? "selected" : ""} value=${cpuSolver.Method.GaussSeidel}>Gauss-Seidel</option>
+                        <option ${this.config.cpuSolver.method === CPUSolverMethod.Jacobi ? "selected" : ""} value=${CPUSolverMethod.Jacobi}>Jacobi</option>
+                        <option ${this.config.cpuSolver.method === CPUSolverMethod.GaussSeidel ? "selected" : ""} value=${CPUSolverMethod.GaussSeidel}>Gauss-Seidel</option>
                     </select>
                 </label>
                 <label for="cpu-sub-steps">
@@ -255,7 +259,7 @@ export class Controller {
                         max=500 />
                 </label>
 
-                ${this.config.cpuSolver.method === cpuSolver.Method.Jacobi ? jacobiFields : ""}
+                ${this.config.cpuSolver.method === CPUSolverMethod.Jacobi ? jacobiFields : ""}
             </div>
         `
     }
@@ -276,7 +280,6 @@ export class Controller {
     }
 
     private updateApp(config: Config, forced: boolean = false) {
-        const solverTypeChanged = config.solverType !== this.config.solverType
         const clothGeometryChanged = config.cloth.width !== this.config.cloth.width
             || config.cloth.height !== this.config.cloth.height
             || config.cloth.widthDivisions !== this.config.cloth.widthDivisions
@@ -305,21 +308,10 @@ export class Controller {
             }
         }
 
-        if (config.solverType === SolverType.CPU) {
-            if (forced || solverTypeChanged) {
-                logger.info("switching to CPU solver")
-                this.app.solver = new cpuSolver.Solver(config.cpuSolver)
-            } else {
-                this.app.solver.config = config.cpuSolver
-            }
-        } else {
-            if (forced || solverTypeChanged) {
-                logger.info("switching to GPU solver")
-                this.app.solver = new gpuSolver.Solver(this.device, config.gpuSolver)
-            } else {
-                this.app.solver.config = config.gpuSolver
-            }
-        }
+        this.app.solver = config.solverType === SolverType.CPU
+            ? new CPUSolver(config.cpuSolver)
+            : new GPUSolver(config.gpuSolver, this.device, this.limits)
+        this.app.solver.add(this.app.cloth)
     }
 
     private buildConfiguration(): Config {
@@ -345,11 +337,11 @@ export class Controller {
             config.cpuSolver = {
                 ...this.config.cpuSolver,
 
-                method: data.get("cpu-method") as cpuSolver.Method,
+                method: data.get("cpu-method") as CPUSolverMethod,
                 subSteps: parseInt(data.get("cpu-sub-steps") as string),
             }
 
-            if (this.config.cpuSolver.method === cpuSolver.Method.Jacobi) {
+            if (this.config.cpuSolver.method === CPUSolverMethod.Jacobi) {
                 config.cpuSolver.relaxation = parseFloat(data.get("cpu-relaxation") as string)
             }
         }
@@ -384,7 +376,7 @@ export class Controller {
 
     private togglePlay(): void {
         this.config.paused = !this.config.paused
-        this.app.solver.paused = this.config.paused
+        this.app.paused = this.config.paused
         this.renderNeeded = true
     }
 }

@@ -5,22 +5,16 @@ import * as vec3 from "./math/vector3"
 import {Cloth} from "./physic/cloth"
 import {Camera} from "./camera"
 import {Renderer} from "./renderer"
-import * as cpuSolver from "./physic/solver_cpu";
 import {monitor} from "./monitor";
-import {Controller} from "./controller";
 import {buildPlaneGeometry} from "./geometry";
-
-interface Solver {
-    paused: boolean
-    config: any
-
-    solve(cloth: Cloth): void
-}
+import {Solver} from "./physic/solver";
+import {CPUSolver, CPUSolverMethod} from "./physic/cpu_solver";
 
 // App is the application.
 export class App {
     public cloth: Cloth
     public solver: Solver
+    public paused: boolean
 
     private readonly device: GPUDevice
     private readonly canvas: HTMLCanvasElement
@@ -32,6 +26,7 @@ export class App {
     constructor(canvas: HTMLCanvasElement, device: GPUDevice) {
         this.canvas = canvas
         this.device = device
+        this.paused = true
         this.stopped = false
 
         this.camera = new Camera(canvas, device, {
@@ -40,11 +35,11 @@ export class App {
         })
 
         this.renderer = new Renderer(canvas, device)
-        this.solver = new cpuSolver.Solver({
+        this.solver = new CPUSolver({
             deltaTime: 1/60,
             subSteps: 15,
             relaxation: 1,
-            method: cpuSolver.Method.GaussSeidel,
+            method: CPUSolverMethod.GaussSeidel,
         })
 
          const geometry = buildPlaneGeometry(this.device, 10, 10, 30, 30)
@@ -53,6 +48,8 @@ export class App {
             stretchCompliance: 0,
             bendCompliance: 0.3,
         }, vec3.create(-5, 0, 0))
+
+        this.solver.add(this.cloth)
     }
 
     // run runs the application.
@@ -62,43 +59,37 @@ export class App {
         const tickTimer = monitor.createTimer("tick")
         const physicTimer = monitor.createTimer("physic")
 
-        let lastTickTimestamp = 0
-        return new Promise((resolve, _) => {
-            const tick = (timestamp: number) => {
-                if (this.stopped) {
-                    resolve()
-                    return
-                }
+        do {
+            await sleep()
 
-                lastTickTimestamp = timestamp
+            tickTimer.start()
 
-                tickTimer.start()
-
+            if (!this.paused) {
                 physicTimer.start()
-                this.solver.solve(this.cloth)
+                await this.solver.solve()
                 physicTimer.end()
-
-                const pipeline = this.cloth.getRenderPipeline(this.camera)
-
-                if (pipeline) {
-                    this.renderer.render(this.cloth.geometry, pipeline, [
-                        this.camera.uniformBindGroup,
-                        this.cloth.uniformBindGroup,
-                    ])
-                }
-
-                tickTimer.end()
-
-                window.requestAnimationFrame(tick)
             }
 
-            window.requestAnimationFrame(tick)
-        })
+            const pipeline = this.cloth.getRenderPipeline(this.camera)
+
+            if (pipeline) {
+                this.renderer.render(this.cloth.geometry, pipeline, [
+                    this.camera.uniformBindGroup,
+                    this.cloth.uniformBindGroup,
+                ])
+            }
+
+            tickTimer.end()
+        } while (!this.stopped)
     }
 
     // stop stops the application.
     public stop(): void {
         this.stopped = true
     }
+}
+
+function sleep(): Promise<number> {
+    return new Promise(window.requestAnimationFrame)
 }
 

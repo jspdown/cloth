@@ -16,6 +16,8 @@ export class Vector3Ref {
     private readonly buffer: Float32Array
     private readonly offset: number
 
+    static alignedLength = 3 + 1
+
     constructor(buffer: Float32Array, offset: number) {
         this.buffer = buffer
         this.offset = offset
@@ -29,109 +31,105 @@ export class Vector3Ref {
 
     get z(): number { return this.buffer[this.offset+2] }
     set z(z: number) { this.buffer[this.offset+2] = z }
+
+    public toString = (): string => {
+        return `(${this.x}, ${this.y}, ${this.z})`
+    }
 }
 
 export class ParticleRef {
     public readonly id: number
 
-    private readonly buffer: Float32Array
+    private readonly particles: Particles
     private readonly offset: number
 
-    static readonly positionOffset = 0
-    static readonly estimatedPositionOffset = 3
-    static readonly deltaPositionOffset = 6
-    static readonly velocityOffset = 9
-    static readonly inverseMassOffset = 12
-    static readonly constraintCountOffset = 13
-    static readonly components = 14
-
-    constructor(id: number, buffer: Float32Array, offset: number) {
+    constructor(id: number, particles: Particles, offset: number) {
         this.id = id
-        this.buffer = buffer
+        this.particles = particles
         this.offset = offset
     }
 
     get position(): Vector3 {
-        const offset = this.offset + ParticleRef.positionOffset
-
-        return new Vector3Ref(this.buffer, offset)
+        return new Vector3Ref(this.particles.positions, this.offset*Vector3Ref.alignedLength)
     }
     set position(position: Vector3) {
-        const offset = this.offset + ParticleRef.positionOffset
-
-        this.buffer[offset] = position.x
-        this.buffer[offset+1] = position.y
-        this.buffer[offset+2] = position.z
+        this.particles.positions[this.offset*Vector3Ref.alignedLength] = position.x
+        this.particles.positions[this.offset*Vector3Ref.alignedLength+1] = position.y
+        this.particles.positions[this.offset*Vector3Ref.alignedLength+2] = position.z
     }
 
     get estimatedPosition(): Vector3 {
-        const offset = this.offset + ParticleRef.estimatedPositionOffset
-
-        return new Vector3Ref(this.buffer, offset)
+        return new Vector3Ref(this.particles.estimatedPositions, this.offset*Vector3Ref.alignedLength)
     }
     set estimatedPosition(estimatedPosition: Vector3) {
-        const offset = this.offset + ParticleRef.estimatedPositionOffset
-
-        this.buffer[offset] = estimatedPosition.x
-        this.buffer[offset+1] = estimatedPosition.y
-        this.buffer[offset+2] = estimatedPosition.z
+        this.particles.estimatedPositions[this.offset*Vector3Ref.alignedLength] = estimatedPosition.x
+        this.particles.estimatedPositions[this.offset*Vector3Ref.alignedLength+1] = estimatedPosition.y
+        this.particles.estimatedPositions[this.offset*Vector3Ref.alignedLength+2] = estimatedPosition.z
     }
 
     get deltaPosition(): Vector3 {
-        const offset = this.offset + ParticleRef.deltaPositionOffset
-
-        return new Vector3Ref(this.buffer, offset)
+        return new Vector3Ref(this.particles.deltaPositions, this.offset*Vector3Ref.alignedLength)
     }
     set deltaPosition(deltaPosition: Vector3) {
-        const offset = this.offset + ParticleRef.deltaPositionOffset
-
-        this.buffer[offset] = deltaPosition.x
-        this.buffer[offset+1] = deltaPosition.y
-        this.buffer[offset+2] = deltaPosition.z
+        this.particles.deltaPositions[this.offset*Vector3Ref.alignedLength] = deltaPosition.x
+        this.particles.deltaPositions[this.offset*Vector3Ref.alignedLength+1] = deltaPosition.y
+        this.particles.deltaPositions[this.offset*Vector3Ref.alignedLength+2] = deltaPosition.z
     }
 
     get velocity(): Vector3 {
-        const offset = this.offset + ParticleRef.velocityOffset
-
-        return new Vector3Ref(this.buffer, offset)
+        return new Vector3Ref(this.particles.velocities, this.offset*Vector3Ref.alignedLength)
     }
     set velocity(velocity: Vector3) {
-        const offset = this.offset + ParticleRef.velocityOffset
-
-        this.buffer[offset] = velocity.x
-        this.buffer[offset+1] = velocity.y
-        this.buffer[offset+2] = velocity.z
+        this.particles.velocities[this.offset*Vector3Ref.alignedLength] = velocity.x
+        this.particles.velocities[this.offset*Vector3Ref.alignedLength+1] = velocity.y
+        this.particles.velocities[this.offset*Vector3Ref.alignedLength+2] = velocity.z
     }
 
     get inverseMass(): number {
-        return this.buffer[this.offset + ParticleRef.inverseMassOffset]
+        return this.particles.inverseMasses[this.offset]
     }
     set inverseMass(inverseMass: number) {
-        this.buffer[this.offset + ParticleRef.inverseMassOffset] = inverseMass
+        this.particles.inverseMasses[this.offset] = inverseMass
     }
 
     get constraintCount(): number {
-        return this.buffer[this.offset + ParticleRef.constraintCountOffset]
+        return this.particles.constraintCounts[this.offset]
     }
     set constraintCount(constraintCount: number) {
-        this.buffer[this.offset + ParticleRef.constraintCountOffset] = constraintCount
+        this.particles.constraintCounts[this.offset] = constraintCount
     }
 }
 
 export class Particles {
     public count: number
-    public readonly buffer: Float32Array
+
+    public readonly positions: Float32Array
+    public readonly velocities: Float32Array
+    public readonly estimatedPositions: Float32Array
+    public readonly deltaPositions: Float32Array
+    public readonly inverseMasses: Float32Array
+    public readonly constraintCounts: Float32Array
+
+    private readonly max: number
 
     constructor(maxParticles: number) {
-        this.buffer = new Float32Array(maxParticles * ParticleRef.components)
+        this.positions = new Float32Array(maxParticles * Vector3Ref.alignedLength)
+        this.velocities = new Float32Array(maxParticles * Vector3Ref.alignedLength)
+        this.estimatedPositions = new Float32Array(maxParticles * Vector3Ref.alignedLength)
+        this.deltaPositions = new Float32Array(maxParticles * Vector3Ref.alignedLength)
+        this.inverseMasses = new Float32Array(maxParticles)
+        this.constraintCounts = new Float32Array(maxParticles)
+
         this.count = 0
+        this.max = maxParticles
     }
 
     add(particle: Particle) {
-        const id = this.count
-        const offset = this.count * ParticleRef.components
+        if (this.count+1 > this.max) {
+            return new Error("max number of particles reached")
+        }
 
-        const p = new ParticleRef(id, this.buffer, offset)
+        const p = new ParticleRef(this.count, this, this.count)
 
         p.position = particle.position
         p.estimatedPosition = particle.estimatedPosition
@@ -143,13 +141,16 @@ export class Particles {
     }
 
     get(i: number): Particle {
-        return new ParticleRef(i, this.buffer, i * ParticleRef.components)
+        return new ParticleRef(i, this, i)
     }
 
     forEach(cb: ParticleIterator): void {
         for (let i = 0; i < this.count; i++) {
-            cb(new ParticleRef(i, this.buffer, i * ParticleRef.components))
+            cb(new ParticleRef(i, this, i))
         }
     }
 }
 
+function fourBytesAlignment(size: number): number {
+    return (size + 3) & ~3
+}

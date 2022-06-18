@@ -10,6 +10,13 @@ async function main() {
     }
 
     const adapter = await gpu.requestAdapter()
+
+    let limits = ""
+    for (let key in adapter.limits as any) {
+        limits += ` - ${key}: **${(adapter.limits as any)[key]}**\n`
+    }
+    logger.info(`limits:\n ${limits}`)
+
     const device = await adapter.requestDevice()
 
     const canvas = document.getElementById("app") as HTMLCanvasElement
@@ -18,7 +25,7 @@ async function main() {
     canvas.height = 512
 
     const app = new App(canvas, device)
-    const controller = new Controller(device, app)
+    const controller = new Controller(app, device, adapter.limits)
 
     logger.attach(document.getElementById("logger"))
     monitor.attach(document.getElementById("monitor"))

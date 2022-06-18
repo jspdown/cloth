@@ -64,7 +64,7 @@ export class Renderer {
         passEncoder.setViewport(0, 0, width, height, 0, 1)
         passEncoder.setScissorRect(0, 0, width, height)
         passEncoder.setVertexBuffer(0, geometry.vertexBuffer)
-        passEncoder.setIndexBuffer(geometry.indexBuffer, "uint16")
+        passEncoder.setIndexBuffer(geometry.indexBuffer, "uint32")
 
         for (let i = 0; i < bindGroups.length; i++) {
             passEncoder.setBindGroup(i, bindGroups[i])

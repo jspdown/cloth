@@ -225,7 +225,7 @@ export class Cloth {
                         { shaderLocation: 1, offset: 3*4, format: "float32x3" as const },
                         { shaderLocation: 2, offset: 2*3*4, format: "float32x3" as const },
                     ],
-                    arrayStride: 3 * 4*3,
+                    arrayStride: 3*3*4,
                     stepMode: "vertex" as const
                 }]
             },

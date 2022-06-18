@@ -1,106 +1,92 @@
 import * as vec3 from "../math/vector3"
 
-import {Particle, Particles} from "./particle"
-import {Method} from "./solver_cpu";
+import {Particle} from "./particle"
 
-const epsilon = 1e-6
+interface ConstraintIterator { (constraint: ConstraintRef): void }
 
-// ConstraintRef presents a specific part of a buffer as a constraint.
-export class ConstraintRef {
-    private readonly buffer: Float32Array
+interface Constraint {
+    p1: number
+    p2: number
+    restValue: number
+    compliance: number
+}
+
+export class ConstraintRef implements Constraint {
+    private readonly constraints: Constraints
     private readonly offset: number
 
-    static readonly components = 4
-    static readonly restValueOffset = 0
-    static readonly complianceOffset = 1
-    static readonly p1Offset = 2
-    static readonly p2Offset = 3
-
-    constructor(buffer: Float32Array, offset: number) {
-        this.buffer = buffer
+    constructor(constraints: Constraints, offset: number) {
+        this.constraints = constraints
         this.offset = offset
     }
 
-    public project(particles: Particles, dt: number, method: Method) {
-        const p1 = particles.get(this.p1)
-        const p2 = particles.get(this.p2)
-
-        const sumInvMasses = p1.inverseMass + p2.inverseMass
-        if (sumInvMasses === 0) {
-            return
-        }
-
-        const alphaTilde = this.compliance / (dt * dt)
-        const p1p2 = vec3.sub(p1.estimatedPosition, p2.estimatedPosition)
-
-        let distance = vec3.length(p1p2)
-        if (distance < epsilon) {
-            return
-        }
-
-        const grad = vec3.divideByScalar(p1p2, distance)
-
-        const c = distance - this.restValue
-        const lagrangeMultiplier = -c / (sumInvMasses + alphaTilde)
-
-        const deltaP1 = vec3.multiplyByScalar(grad, lagrangeMultiplier * p1.inverseMass)
-        const deltaP2 = vec3.multiplyByScalar(grad, -lagrangeMultiplier * p2.inverseMass)
-
-        if (method === Method.Jacobi) {
-            vec3.addMut(p1.deltaPosition, deltaP1)
-            vec3.addMut(p2.deltaPosition, deltaP2)
-        } else {
-            vec3.addMut(p1.estimatedPosition, deltaP1)
-            vec3.addMut(p2.estimatedPosition, deltaP2)
-        }
-    }
-
     public get p1(): number {
-        return this.buffer[this.offset + ConstraintRef.p1Offset]
+        return this.constraints.affectedParticles[this.offset*2]
     }
     public set p1(p1: number) {
-        this.buffer[this.offset + ConstraintRef.p1Offset] = p1
+        this.constraints.affectedParticles[this.offset*2] = p1
     }
 
     public get p2(): number {
-        return this.buffer[this.offset + ConstraintRef.p2Offset]
+        return this.constraints.affectedParticles[this.offset*2+1]
     }
     public set p2(p2: number) {
-        this.buffer[this.offset + ConstraintRef.p2Offset] = p2
+        this.constraints.affectedParticles[this.offset*2+1] = p2
     }
 
     public get restValue(): number {
-        return this.buffer[this.offset + ConstraintRef.restValueOffset]
+        return this.constraints.restValues[this.offset]
     }
     public set restValue(restValue: number) {
-        this.buffer[this.offset + ConstraintRef.restValueOffset] = restValue
+        this.constraints.restValues[this.offset] = restValue
     }
 
     public get compliance(): number {
-        return this.buffer[this.offset + ConstraintRef.complianceOffset]
+        return this.constraints.compliances[this.offset]
     }
     public set compliance(compliance: number) {
-        this.buffer[this.offset + ConstraintRef.complianceOffset] = compliance
+        this.constraints.compliances[this.offset] = compliance
+    }
+
+    public unref(): Constraint {
+        return {
+            p1: this.p1,
+            p2: this.p2,
+            compliance: this.compliance,
+            restValue: this.restValue
+        }
     }
 }
 
-// StretchConstraints wraps a buffer of stretch constraints.
 export class Constraints {
-    private readonly buffer: Float32Array
     public count: number
 
+    public restValues: Float32Array
+    public compliances: Float32Array
+    public affectedParticles: Float32Array
+
+    public colors: Uint32Array
+
+    private readonly adjacency: number[][]
+    private readonly max: number
+
     constructor(maxConstraints: number) {
-        this.buffer = new Float32Array(maxConstraints * ConstraintRef.components)
+        this.restValues = new Float32Array(maxConstraints)
+        this.compliances = new Float32Array(maxConstraints)
+        this.affectedParticles = new Float32Array(maxConstraints*2)
+        this.colors = new Uint32Array([0, 0])
+        this.adjacency = []
+
         this.count = 0
+        this.max = maxConstraints
     }
 
-    public add(p1: Particle, p2: Particle, compliance: number) {
-        if (this.count+1 >= this.buffer.length/2) {
+    public add(p1: Particle, p2: Particle, compliance: number): void {
+        if (this.count+1 > this.max) {
             throw new Error("max number of constraints reached")
         }
 
-        const offset = this.count * ConstraintRef.components
-        const c = new ConstraintRef(this.buffer, offset)
+        const c = new ConstraintRef(this, this.count)
 
         c.compliance = compliance
         c.restValue = vec3.distance(p1.position, p2.position)
@@ -110,16 +96,98 @@ export class Constraints {
         p1.constraintCount++
         p2.constraintCount++
 
+        this.addAdjacency(p1.id, p2.id)
+        this.addAdjacency(p2.id, p1.id)
+
+        this.colors[this.colors.length-1]++
         this.count++
     }
 
-    // project projects all the constraints on the given particles.
-    public project(particles: Particles, dt: number, method: Method) {
-        for (let i = 0; i < this.count; i++) {
-            const offset = i * ConstraintRef.components
-            const constraint = new ConstraintRef(this.buffer, offset)
+    public color(): void {
+        // Color constraints in such a way that constraints from a group are not
+        // sharing a single particle.
+        const particlesCount = this.adjacency.length
+        const constraintsCount = this.restValues.length
 
-            constraint.project(particles, dt, method)
+        const constraintColors = []
+
+        const markedConstraints = new Array<boolean>(constraintsCount).fill(false)
+        const markedParticles = new Array<boolean>(particlesCount).fill(false)
+        let remainingUnmarkedConstraints = constraintsCount
+
+        while (remainingUnmarkedConstraints) {
+            const color = []
+
+            markedParticles.fill(false)
+
+            for (let i = 0; i < constraintsCount; i++) {
+                if (markedConstraints[i]) continue
+
+                const p1 = this.affectedParticles[i*2]
+                const p2 = this.affectedParticles[i*2+1]
+
+                if (markedParticles[p1] || markedParticles[p2]) continue
+
+                color.push(i)
+                markedConstraints[i] = true
+                remainingUnmarkedConstraints--
+
+                markedParticles[p1] = true
+                markedParticles[p2] = true
+            }
+
+            constraintColors.push(color)
         }
+
+        // Rearrange constraints by color.
+        const coloredConstraints = new Constraints(constraintsCount)
+        const colors = new Uint32Array(constraintColors.length * 2)
+
+        let currentIdx = 0
+        for (let c = 0; c < constraintColors.length; c++) {
+            colors[c*2] = currentIdx
+
+            for (let i = 0; i < constraintColors[c].length; i++) {
+                coloredConstraints.set(currentIdx, this.get(constraintColors[c][i]))
+                currentIdx++
+            }
+
+            colors[c*2+1] = currentIdx - colors[c*2]
+        }
+
+        this.restValues = coloredConstraints.restValues
+        this.compliances = coloredConstraints.compliances
+        this.affectedParticles = coloredConstraints.affectedParticles
+
+        this.colors = colors
+    }
+
+    public get(i: number): ConstraintRef {
+        return new ConstraintRef(this, i)
+    }
+
+    public set(i: number, c: Constraint) {
+        const ref = new ConstraintRef(this, i)
+
+        ref.compliance = c.compliance
+        ref.restValue = c.restValue
+        ref.p1 = c.p1
+        ref.p2 = c.p2
+    }
+
+    public forEach(cb: ConstraintIterator): void {
+        for (let i = 0; i < this.count; i++) {
+            cb(new ConstraintRef(this, i))
+        }
+    }
+
+    private addAdjacency(p1: number, p2: number): void {
+        if (p1 > this.adjacency.length - 1) {
+            for (let i = this.adjacency.length; i <= p1; i++) {
+                this.adjacency.push([])
+            }
+        }
+
+        this.adjacency[p1].push(p2)
     }
 }

@@ -1,23 +1,15 @@
 import * as vec3 from "./math/vector3"
 
-import {VertexBuffer} from "./vertex"
+import {VertexBuffer, VertexRef} from "./vertex"
 import {logger} from "./logger";
-
-const vertexComponents = 6
-const vertexPositionOffset = 0
-const vertexNormalOffset = 3
 
 // Geometry holds a mesh geometry.
 export class Geometry {
     public vertices: VertexBuffer
-    public defaultIndices: Uint16Array
-    public wireframeIndices?: Uint16Array
+    public defaultIndices: Uint32Array
+    public wireframeIndices?: Uint32Array
     public topology: Topology
     public primitive: GPUPrimitiveTopology
-
-    public vertexComponents: number
-    public vertexPositionOffset: number
-    public vertexNormalOffset: number
 
     private readonly defaultIndexBuffer: GPUBuffer
     private wireframeIndexBuffer?: GPUBuffer
@@ -26,15 +18,11 @@ export class Geometry {
     private device: GPUDevice
     private _wireframe: boolean
 
-    constructor(device: GPUDevice, vertices: VertexBuffer, indices: Uint16Array) {
+    constructor(device: GPUDevice, vertices: VertexBuffer, indices: Uint32Array) {
         this.vertices = vertices
         this.defaultIndices = indices
         this.topology = buildTopology(vertices, indices)
         this.primitive = "triangle-list"
-
-        this.vertexComponents = vertexComponents
-        this.vertexPositionOffset = vertexPositionOffset
-        this.vertexNormalOffset = vertexNormalOffset
 
         this.device = device
         this._wireframe = false
@@ -46,7 +34,7 @@ export class Geometry {
             mappedAtCreation: true
         })
 
-        const writeIndicesArr = new Uint16Array(this.defaultIndexBuffer.getMappedRange())
+        const writeIndicesArr = new Uint32Array(this.defaultIndexBuffer.getMappedRange())
         writeIndicesArr.set(this.defaultIndices)
         this.defaultIndexBuffer.unmap()
 
@@ -127,7 +115,7 @@ interface Edge {
     triangles: number[]
 }
 
-function buildTopology(vertices: VertexBuffer, indices: Uint16Array) {
+function buildTopology(vertices: VertexBuffer, indices: Uint32Array) {
     const numTriangles = indices.length / 3
 
     const vertexTriangles = new Array(vertices.count)
@@ -183,8 +171,8 @@ function buildTopology(vertices: VertexBuffer, indices: Uint16Array) {
     return { triangles, edges }
 }
 
-function buildWireframeIndices(topology: Topology): Uint16Array {
-    const indices = new Uint16Array(topology.edges.length * 2)
+function buildWireframeIndices(topology: Topology): Uint32Array {
+    const indices = new Uint32Array(topology.edges.length * 2)
 
     let idx = 0
     for (let edge of topology.edges) {
@@ -200,49 +188,38 @@ function buildWireframeIndices(topology: Topology): Uint16Array {
 // buildPlaneGeometry builds a plane geometry.
 export function buildPlaneGeometry(device: GPUDevice, width: number, height: number, widthDivisions: number, heightDivisions: number): Geometry {
     const widthStep = width / widthDivisions
-    const heightStep = height / widthDivisions
+    const heightStep = height / heightDivisions
 
     logger.info(`plane geometry: size=(**${width}**, **${height}**) divisions=(**${widthDivisions}**, **${heightDivisions}**)`)
 
-    const triangles = 2 * heightDivisions * widthDivisions
     const vertices = new VertexBuffer((heightDivisions + 1) * (widthDivisions + 1))
-    const indices = new Uint16Array(3 * triangles)
+    const triangles = 2 * heightDivisions * widthDivisions
+    const indices = new Uint32Array(3 * triangles)
 
     let indicesIdx = 0
-    for (let j = 0; j <= heightDivisions; j++) {
-        for (let i = 0; i <= widthDivisions; i++) {
+    for (let j = 0; j < heightDivisions + 1; j++) {
+        const y = j * heightStep
+
+        for (let i = 0; i < widthDivisions + 1; i++) {
+            const x = i * widthStep
+
             vertices.add({
-                position: vec3.create(i * widthStep, 0, j * heightStep),
+                position: vec3.create(x, 0, y),
                 normal: vec3.create(0, 1, 0),
                 color: vec3.create(0, 1, 0),
             })
+        }
+    }
 
-            // Generate triangle indices following this pattern:
-            // 0 - 1 - 2    j=1, i=0 => 0, 4, 1,
-            // | / | / |    j=1, i=1 => 1, 4, 5,  1, 5, 2
-            // 4 - 5 - 6    j=1, i=2 => 2, 5, 6,
+    for (let j = 0; j < heightDivisions; j++) {
+        for (let i = 0; i < widthDivisions; i++) {
+            const a = i + (widthDivisions + 1) * j
+            const b = i + (widthDivisions + 1) * (j + 1)
+            const c = (i + 1) + (widthDivisions + 1) * (j + 1)
+            const d = (i + 1) + (widthDivisions + 1) * j
 
-            if (j == 0) {
-                continue
-            }
-
-            const k = i + j * (widthDivisions + 1)
-            if (i > 0) {
-                indices.set([
-                    k - (widthDivisions + 1),
-                    k - 1,
-                    k,
-                ], indicesIdx)
-                indicesIdx += 3
-            }
-            if (i < widthDivisions) {
-                indices.set([
-                    k - (widthDivisions + 1),
-                    k,
-                    k - widthDivisions,
-                ], indicesIdx)
-                indicesIdx += 3
-            }
+            indices.set([a, b, d], indicesIdx); indicesIdx += 3
+            indices.set([b, c, d], indicesIdx); indicesIdx += 3
         }
     }
 

@@ -42,7 +42,7 @@ export class Camera {
         this.device = device
         this.config = { ...{
             fovy: Math.PI / 4,
-            near: 0.1,
+            near: 0.0001,
             far: 1000,
             zoomSpeed: 2,
             distance: 5,
