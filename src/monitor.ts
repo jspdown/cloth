@@ -1,5 +1,5 @@
 
-const movingAverageLength = 100
+const movingAverageLength = 5
 const renderInterval = 200
 
 class Timer {

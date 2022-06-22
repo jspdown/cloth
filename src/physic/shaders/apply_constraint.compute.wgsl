@@ -15,15 +15,14 @@ struct ColorConfig {
 @group(0) @binding(2) var<storage, read> restValues: array<f32>;
 @group(0) @binding(3) var<storage, read> compliances: array<f32>;
 @group(0) @binding(4) var<storage, read> affectedParticles: array<f32>;
-@group(0) @binding(5) var<storage, read_write> debug: array<vec3<f32>>;
 
 @group(1) @binding(0) var<uniform> solverConfig: SolverConfig;
 @group(2) @binding(0) var<uniform> colorConfig: ColorConfig;
 
-@stage(compute) @workgroup_size(8, 8, 4)
+@stage(compute) @workgroup_size(16, 16)
 fn main(@builtin(num_workgroups) workgroup_size: vec3<u32>, @builtin(global_invocation_id) global_id: vec3<u32>) {
-    let w = workgroup_size.x * 8u;
-    let h = workgroup_size.y * 8u;
+    let w = workgroup_size.x * 16u;
+    let h = workgroup_size.y * 16u;
 
     let id = global_id.x
         + (global_id.y * w)
@@ -37,8 +36,6 @@ fn main(@builtin(num_workgroups) workgroup_size: vec3<u32>, @builtin(global_invo
     var constraint_id = colorConfig.start + id;
     var p1_id = u32(affectedParticles[constraint_id * 2u]);
     var p2_id = u32(affectedParticles[constraint_id * 2u + 1u]);
-
-    //debug[constraint_id] = vec3(f32(constraint_id), f32(global_id.y), debug[constraint_id].z+1.0);
 
     var w1 = inverseMasses[p1_id];
     var w2 = inverseMasses[p2_id];

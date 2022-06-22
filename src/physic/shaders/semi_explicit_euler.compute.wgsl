@@ -12,10 +12,10 @@ struct Config {
 
 @group(1) @binding(0) var<uniform> config: Config;
 
-@stage(compute) @workgroup_size(8, 8, 4)
+@stage(compute) @workgroup_size(16, 16)
 fn main(@builtin(num_workgroups) workgroup_size: vec3<u32>, @builtin(global_invocation_id) global_id: vec3<u32>) {
-    let w = workgroup_size.x * 8u;
-    let h = workgroup_size.y * 8u;
+    let w = workgroup_size.x * 16u;
+    let h = workgroup_size.y * 16u;
 
     let id = global_id.x
         + (global_id.y * w)

@@ -33,7 +33,6 @@ interface PhysicObject {
     affectedParticlesBuffer: GPUBuffer
     colorBuffer: GPUBuffer
     colorWriteBuffer: GPUBuffer
-    debugBuffer: GPUBuffer
 
     eulerBindGroup: GPUBindGroup
     constraintBindGroup: GPUBindGroup
@@ -112,9 +111,6 @@ export class GPUSolver implements Solver {
                             {binding: 2, visibility: GPUShaderStage.COMPUTE, buffer: { type: "read-only-storage" } },
                             {binding: 3, visibility: GPUShaderStage.COMPUTE, buffer: { type: "read-only-storage" } },
                             {binding: 4, visibility: GPUShaderStage.COMPUTE, buffer: { type: "read-only-storage" } },
-                            /// DEBUG
-                            {binding: 5, visibility: GPUShaderStage.COMPUTE, buffer: { type: "storage" } },
-                            /// <<<<<
                         ],
                     }),
                     this.configLayout,
@@ -161,51 +157,22 @@ export class GPUSolver implements Solver {
                 size: fourBytesAlignment(object.cloth.particles.positions.length * f32Size),
                 usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
             })
-            const velocityReadBuffer = this.device.createBuffer({
-                label: "velocity-read-buffer",
-                size: fourBytesAlignment(object.cloth.particles.velocities.length * f32Size),
-                usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
-            })
+
+            const encoder = this.device.createCommandEncoder()
 
             for (let subStep = 0; subStep < this.config.subSteps; subStep++) {
-                const encoder = this.device.createCommandEncoder()
-
                 this.semiExplicitEuler(encoder, object)
-                await this.applyConstraints(encoder, object)
+                this.applyConstraints(encoder, object)
                 this.updatePositions(encoder, object)
-
-                // /// DEBUG
-                // const debugReadBuffer = this.device.createBuffer({
-                //     label: "debug-read-buffer",
-                //     size: fourBytesAlignment(object.cloth.constraints.count * Vector3Ref.alignedLength * f32Size),
-                //     usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
-                // })
-                // encoder.copyBufferToBuffer(object.debugBuffer, 0, debugReadBuffer, 0, object.cloth.constraints.count * Vector3Ref.alignedLength * f32Size)
-                // /// <<<<<
-
-                // Copy the final positions into the read buffer.
-                if (subStep === this.config.subSteps - 1) {
-                    encoder.copyBufferToBuffer(object.positionBuffer, 0, positionReadBuffer, 0, object.cloth.particles.positions.byteLength)
-                    encoder.copyBufferToBuffer(object.velocityBuffer, 0, velocityReadBuffer, 0, object.cloth.particles.velocities.byteLength)
-                }
-
-                this.device.queue.submit([encoder.finish()])
-
-                // /// DEBUG
-                // await debugReadBuffer.mapAsync(GPUMapMode.READ)
-                // printVec3f32Array(new Float32Array(debugReadBuffer.getMappedRange().slice(0)))
-                // debugReadBuffer.unmap()
-                // /// <<<<<
             }
 
-            await Promise.all([
-                positionReadBuffer.mapAsync(GPUMapMode.READ),
-                velocityReadBuffer.mapAsync(GPUMapMode.READ),
-            ])
+            encoder.copyBufferToBuffer(object.positionBuffer, 0, positionReadBuffer, 0, object.cloth.particles.positions.byteLength)
+
+            this.device.queue.submit([encoder.finish()])
+
+            await positionReadBuffer.mapAsync(GPUMapMode.READ)
             object.cloth.particles.positions.set(new Float32Array(positionReadBuffer.getMappedRange()))
-            object.cloth.particles.velocities.set(new Float32Array(velocityReadBuffer.getMappedRange()))
             positionReadBuffer.unmap()
-            velocityReadBuffer.unmap()
 
             object.cloth.updatePositionsAndNormals()
         }
@@ -218,17 +185,16 @@ export class GPUSolver implements Solver {
         passEncoder.setBindGroup(0, object.eulerBindGroup)
         passEncoder.setBindGroup(1, object.configBindGroup)
 
-        const dispatch = Math.cbrt(object.cloth.particles.count)
-        const dispatchX = Math.ceil(dispatch/8)
-        const dispatchY = Math.ceil(dispatch/8)
-        const dispatchZ = Math.ceil(dispatch/4)
+        const dispatch = Math.sqrt(object.cloth.particles.count)
+        const dispatchX = Math.ceil(dispatch/16)
+        const dispatchY = Math.ceil(dispatch/16)
 
-        passEncoder.dispatchWorkgroups(dispatchX, dispatchY, dispatchZ)
+        passEncoder.dispatchWorkgroups(dispatchX, dispatchY)
 
         passEncoder.end()
     }
 
-    private async applyConstraints(encoder: GPUCommandEncoder, object: PhysicObject) {
+    private applyConstraints(encoder: GPUCommandEncoder, object: PhysicObject) {
         const colors = object.cloth.constraints.colors
 
         for (let i = 0; i < colors.length/2; i++) {
@@ -241,12 +207,11 @@ export class GPUSolver implements Solver {
             passEncoder.setBindGroup(1, object.configBindGroup)
             passEncoder.setBindGroup(2, object.colorBindGroup)
 
-            const dispatch = Math.cbrt(colors[i*2+1])
-            const dispatchX = Math.ceil(dispatch/8)
-            const dispatchY = Math.ceil(dispatch/8)
-            const dispatchZ = Math.ceil(dispatch/4)
+            const dispatch = Math.sqrt(colors[i*2+1])
+            const dispatchX = Math.ceil(dispatch/16)
+            const dispatchY = Math.ceil(dispatch/16)
 
-            passEncoder.dispatchWorkgroups(dispatchX, dispatchY, dispatchZ)
+            passEncoder.dispatchWorkgroups(dispatchX, dispatchY)
 
             passEncoder.end()
         }
@@ -259,16 +224,15 @@ export class GPUSolver implements Solver {
         passEncoder.setBindGroup(0, object.positionBindGroup)
         passEncoder.setBindGroup(1, object.configBindGroup)
 
-        const dispatch = Math.cbrt(object.cloth.particles.count)
-        const dispatchX = Math.ceil(dispatch/8)
-        const dispatchY = Math.ceil(dispatch/8)
-        const dispatchZ = Math.ceil(dispatch/4)
+        const dispatch = Math.sqrt(object.cloth.particles.count)
+        const dispatchX = Math.ceil(dispatch/16)
+        const dispatchY = Math.ceil(dispatch/16)
 
-        passEncoder.dispatchWorkgroups(dispatchX, dispatchY, dispatchZ)
+        passEncoder.dispatchWorkgroups(dispatchX, dispatchY)
 
         passEncoder.end()
     }
-
+    
     public add(cloth: Cloth): void {
         cloth.constraints.color()
 
@@ -342,12 +306,6 @@ export class GPUSolver implements Solver {
         this.writeAllBuffer(affectedParticlesBuffer, cloth.constraints.affectedParticles)
         this.writeAllBuffer(colorWriteBuffer, cloth.constraints.colors)
 
-        const debugBuffer = this.device.createBuffer({
-            label: "debug-buffer",
-            size: fourBytesAlignment(cloth.constraints.count * Vector3Ref.alignedLength * f32Size),
-            usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST,
-        })
-
         const eulerBindGroup = this.device.createBindGroup({
             layout: this.semiExplicitEulerPipeline.getBindGroupLayout(0),
             entries: [
@@ -365,9 +323,6 @@ export class GPUSolver implements Solver {
                 { binding: 2, resource: { buffer: restValueBuffer } },
                 { binding: 3, resource: { buffer: complianceBuffer } },
                 { binding: 4, resource: { buffer: affectedParticlesBuffer } },
-                /// DEBUG
-                { binding: 5, resource: { buffer: debugBuffer } },
-                /// <<<<<
             ],
         })
         const positionBindGroup = this.device.createBindGroup({
@@ -406,8 +361,6 @@ export class GPUSolver implements Solver {
             configBuffer,
             colorBuffer,
             colorWriteBuffer,
-
-            debugBuffer,
 
             eulerBindGroup,
             constraintBindGroup,
