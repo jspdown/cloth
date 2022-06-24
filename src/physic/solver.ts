@@ -21,8 +21,6 @@ export interface SolverConfig {
 interface PhysicObject {
     cloth: Cloth
 
-    configBuffer: GPUBuffer
-
     indexBuffer: GPUBuffer
     positionBuffer: GPUBuffer
     normalBuffer: GPUBuffer
@@ -39,7 +37,6 @@ interface PhysicObject {
     constraintBindGroup: GPUBindGroup
     positionBindGroup: GPUBindGroup
     normalBindGroup: GPUBindGroup
-    configBindGroup: GPUBindGroup
     colorBindGroup: GPUBindGroup
 }
 
@@ -49,11 +46,13 @@ export class Solver {
 
     private readonly objects: PhysicObject[]
 
+    private readonly configBuffer: GPUBuffer
+    private readonly configBindGroup: GPUBindGroup
+
     private readonly applyConstraintPipeline: GPUComputePipeline
     private readonly semiExplicitEulerPipeline: GPUComputePipeline
     private readonly updatePositionPipeline: GPUComputePipeline
     private readonly updateNormalPipeline: GPUComputePipeline
-    private readonly configLayout: GPUBindGroupLayout
 
     constructor(config: SolverConfig, device: GPUDevice) {
         this.device = device
@@ -67,17 +66,37 @@ export class Solver {
         }
         this.objects = []
 
-        const applyConstraintShaderModule = device.createShaderModule({ code: applyConstraintComputeShaderCode })
-        const semiExplicitEulerShaderModule = device.createShaderModule({ code: semiExplicitEulerComputeShaderCode })
-        const updatePositionShaderModule = device.createShaderModule({ code: updatePositionComputeShaderCode })
-        const updateNormalShaderModule = device.createShaderModule({ code: updateNormalComputeShaderCode })
+        const configData = new Float32Array([
+            this.config.gravity.x, this.config.gravity.y, this.config.gravity.z,
+            this.config.deltaTime / this.config.subSteps,
+        ])
 
-        this.configLayout = device.createBindGroupLayout({
-            label: "config-layout",
+        this.configBuffer = this.device.createBuffer({
+            label: "config",
+            size: fourBytesAlignment(configData.length * f32Size),
+            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+        })
+
+        this.writeAllBuffer(this.configBuffer, configData)
+
+        const configLayout = device.createBindGroupLayout({
+            label: "config",
             entries: [
                 {binding: 0, visibility: GPUShaderStage.COMPUTE, buffer: { type: "uniform" } },
             ],
         })
+        this.configBindGroup = this.device.createBindGroup({
+            label: "config",
+            layout: configLayout,
+            entries: [
+                { binding: 0, resource: { buffer: this.configBuffer } },
+            ],
+        })
+
+        const applyConstraintShaderModule = device.createShaderModule({ code: applyConstraintComputeShaderCode })
+        const semiExplicitEulerShaderModule = device.createShaderModule({ code: semiExplicitEulerComputeShaderCode })
+        const updatePositionShaderModule = device.createShaderModule({ code: updatePositionComputeShaderCode })
+        const updateNormalShaderModule = device.createShaderModule({ code: updateNormalComputeShaderCode })
 
         this.semiExplicitEulerPipeline = device.createComputePipeline({
             label: "semi-explicit-euler-compute-pipeline",
@@ -93,7 +112,7 @@ export class Solver {
                             {binding: 3, visibility: GPUShaderStage.COMPUTE, buffer: { type: "read-only-storage" } },
                         ],
                     }),
-                    this.configLayout,
+                    configLayout,
                 ],
             }),
             compute: {
@@ -116,7 +135,7 @@ export class Solver {
                             {binding: 4, visibility: GPUShaderStage.COMPUTE, buffer: { type: "read-only-storage" } },
                         ],
                     }),
-                    this.configLayout,
+                    configLayout,
                     device.createBindGroupLayout({
                         label: "color-layout",
                         entries: [
@@ -143,7 +162,7 @@ export class Solver {
                             {binding: 2, visibility: GPUShaderStage.COMPUTE, buffer: { type: "storage" } },
                         ],
                     }),
-                    this.configLayout,
+                    configLayout,
                 ],
             }),
             compute: {
@@ -198,7 +217,7 @@ export class Solver {
 
         passEncoder.setPipeline(this.semiExplicitEulerPipeline)
         passEncoder.setBindGroup(0, object.eulerBindGroup)
-        passEncoder.setBindGroup(1, object.configBindGroup)
+        passEncoder.setBindGroup(1, this.configBindGroup)
 
         const dispatch = Math.sqrt(object.cloth.particles.count)
         const dispatchX = Math.ceil(dispatch/16)
@@ -219,7 +238,7 @@ export class Solver {
 
             passEncoder.setPipeline(this.applyConstraintPipeline)
             passEncoder.setBindGroup(0, object.constraintBindGroup)
-            passEncoder.setBindGroup(1, object.configBindGroup)
+            passEncoder.setBindGroup(1, this.configBindGroup)
             passEncoder.setBindGroup(2, object.colorBindGroup)
 
             const dispatch = Math.sqrt(colors[i*2+1])
@@ -237,7 +256,7 @@ export class Solver {
 
         passEncoder.setPipeline(this.updatePositionPipeline)
         passEncoder.setBindGroup(0, object.positionBindGroup)
-        passEncoder.setBindGroup(1, object.configBindGroup)
+        passEncoder.setBindGroup(1, this.configBindGroup)
 
         const dispatch = Math.sqrt(object.cloth.particles.count)
         const dispatchX = Math.ceil(dispatch/16)
@@ -265,21 +284,6 @@ export class Solver {
     public add(cloth: Cloth): void {
         cloth.constraints.color()
 
-        const config = new Float32Array([
-            this.config.deltaTime / this.config.subSteps,
-            cloth.constraints.count,
-            cloth.particles.count,
-            0,
-            this.config.gravity.x,
-            this.config.gravity.y,
-            this.config.gravity.z,
-        ])
-
-        const configBuffer = this.device.createBuffer({
-            label: "config-buffer",
-            size: fourBytesAlignment(config.length * f32Size),
-            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-        })
         const estimatedPositionBuffer = this.device.createBuffer({
             label: "estimated-position-buffer",
             size: fourBytesAlignment(cloth.particles.estimatedPositions.length * f32Size),
@@ -321,7 +325,6 @@ export class Solver {
             usage: GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST,
         });
 
-        this.writeAllBuffer(configBuffer, config)
         this.writeAllBuffer(velocityBuffer, cloth.particles.velocities)
         this.writeAllBuffer(inverseMasseBuffer, cloth.particles.inverseMasses)
         this.writeAllBuffer(restValueBuffer, cloth.constraints.restValues)
@@ -365,13 +368,6 @@ export class Solver {
             ],
         })
 
-        const configBindGroup = this.device.createBindGroup({
-            layout: this.configLayout,
-            entries: [
-                { binding: 0, resource: { buffer: configBuffer } },
-            ],
-        })
-
         const colorBindGroup = this.device.createBindGroup({
             layout: this.applyConstraintPipeline.getBindGroupLayout(2),
             entries: [
@@ -392,7 +388,6 @@ export class Solver {
             restValueBuffer,
             complianceBuffer,
             affectedParticlesBuffer,
-            configBuffer,
             colorBuffer,
             colorWriteBuffer,
 
@@ -400,7 +395,6 @@ export class Solver {
             constraintBindGroup,
             positionBindGroup,
             normalBindGroup,
-            configBindGroup,
             colorBindGroup,
         })
     }

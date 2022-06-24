@@ -1,8 +1,6 @@
 struct Config {
-    deltaTime: f32,
-    constraintCount: f32,
-    particlesCount: f32,
     gravity: vec3<f32>,
+    deltaTime: f32,
 };
 
 @group(0) @binding(0) var<storage, read_write> positions: array<vec3<f32>>;
@@ -21,7 +19,7 @@ fn main(@builtin(num_workgroups) workgroup_size: vec3<u32>, @builtin(global_invo
         + (global_id.z * w * h);
 
     // Guard against out-of-bounds work group sizes.
-    if (id >= u32(config.particlesCount)) {
+    if (id >= arrayLength(&positions)) {
         return;
     }
 

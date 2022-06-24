@@ -1,8 +1,6 @@
 struct SolverConfig {
-    deltaTime: f32,
-    constraintCount: f32,
-    particlesCount: f32,
     gravity: vec3<f32>,
+    deltaTime: f32,
 };
 
 struct ColorConfig {
