@@ -22,7 +22,7 @@ export class App {
 
     private stopped: boolean
 
-    constructor(canvas: HTMLCanvasElement, device: GPUDevice, limits: GPUSupportedLimits) {
+    constructor(canvas: HTMLCanvasElement, device: GPUDevice) {
         this.canvas = canvas
         this.device = device
         this.paused = true
@@ -39,7 +39,7 @@ export class App {
             subSteps: 15,
             relaxation: 1,
             gravity: vec3.create(0, -9.8, 0),
-        }, this.device, limits)
+        }, this.device)
 
          const geometry = buildPlaneGeometry(this.device, 10, 10, 30, 30)
 

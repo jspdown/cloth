@@ -24,8 +24,8 @@ async function main() {
     canvas.width = 1000
     canvas.height = 512
 
-    const app = new App(canvas, device, adapter.limits)
-    const controller = new Controller(app, device, adapter.limits)
+    const app = new App(canvas, device)
+    const controller = new Controller(app, device)
 
     logger.attach(document.getElementById("logger"))
     monitor.attach(document.getElementById("monitor"))

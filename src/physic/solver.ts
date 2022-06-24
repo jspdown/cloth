@@ -46,7 +46,6 @@ interface PhysicObject {
 export class Solver {
     private config: SolverConfig
     private readonly device: GPUDevice
-    private readonly limits: GPUSupportedLimits
 
     private readonly objects: PhysicObject[]
 
@@ -56,7 +55,7 @@ export class Solver {
     private readonly updateNormalPipeline: GPUComputePipeline
     private readonly configLayout: GPUBindGroupLayout
 
-    constructor(config: SolverConfig, device: GPUDevice, limits: GPUSupportedLimits) {
+    constructor(config: SolverConfig, device: GPUDevice) {
         this.device = device
         this.config = {
             deltaTime: 1/60,

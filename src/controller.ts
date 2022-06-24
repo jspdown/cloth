@@ -25,17 +25,15 @@ interface ClothConfig {
 export class Controller {
     private readonly app: App
     private readonly device: GPUDevice
-    private readonly limits: GPUSupportedLimits
 
     private config: Config
     private renderNeeded: boolean
 
     private el: HTMLElement
 
-    constructor(app: App, device: GPUDevice, limits: GPUSupportedLimits) {
+    constructor(app: App, device: GPUDevice) {
         this.app = app
         this.device = device
-        this.limits = limits
 
         this.renderNeeded = true
 
@@ -227,7 +225,7 @@ export class Controller {
         }
 
         if (forced || solverConfigChanged || clothGeometryChanged || clothConfigChanged) {
-            this.app.solver = new Solver(config.solver, this.device, this.limits)
+            this.app.solver = new Solver(config.solver, this.device)
             this.app.solver.add(this.app.cloth)
         }
     }
