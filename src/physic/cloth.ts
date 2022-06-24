@@ -68,7 +68,7 @@ export class Cloth {
     public set geometry(geometry: Geometry) {
         this._geometry = geometry
         this.particles = buildParticles(this._geometry, this._config.unit, this._config.density)
-        this.constraints = buildConstraints(this._geometry, this.particles, this._config.stretchCompliance, this._config.bendCompliance)
+        this.constraints = buildConstraints(this.device, this._geometry, this.particles, this._config.stretchCompliance, this._config.bendCompliance)
 
         logger.info(`vertices: **${this._geometry.vertices.count}**`)
         logger.info(`triangles: **${this._geometry.topology.triangles.length}**`)
@@ -106,7 +106,7 @@ export class Cloth {
             this.particles = buildParticles(this._geometry, cfg.unit, cfg.density)
         }
         if (constraintsNeedsUpdate) {
-            this.constraints = buildConstraints(this._geometry, this.particles, cfg.stretchCompliance, cfg.bendCompliance)
+            this.constraints = buildConstraints(this.device, this._geometry, this.particles, cfg.stretchCompliance, cfg.bendCompliance)
         }
 
         this._config = cfg
@@ -302,7 +302,7 @@ interface constraint {
     p2: number
 }
 
-function buildConstraints(geometry: Geometry, particles: Particles, stretchCompliance: number, bendCompliance: number): Constraints {
+function buildConstraints(device: GPUDevice, geometry: Geometry, particles: Particles, stretchCompliance: number, bendCompliance: number): Constraints {
     const constraintParticles: constraint[] = []
 
     // Generate stretching constraints.
@@ -353,7 +353,7 @@ function buildConstraints(geometry: Geometry, particles: Particles, stretchCompl
     // Shuffle constraints to prevent resonances.
     shuffle(constraintParticles)
 
-    const constraints = new Constraints(constraintParticles.length)
+    const constraints = new Constraints(device, constraintParticles.length)
     for (let c of constraintParticles) {
         constraints.add(particles.get(c.p1), particles.get(c.p2), c.compliance)
     }

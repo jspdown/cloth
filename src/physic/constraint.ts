@@ -4,6 +4,8 @@ import {Particle} from "./particle"
 
 interface ConstraintIterator { (constraint: ConstraintRef): void }
 
+const maxColors = 50
+
 interface Constraint {
     p1: number
     p2: number
@@ -12,40 +14,40 @@ interface Constraint {
 }
 
 export class ConstraintRef implements Constraint {
-    private readonly constraints: Constraints
+    private readonly data: ConstraintsData
     private readonly offset: number
 
-    constructor(constraints: Constraints, offset: number) {
-        this.constraints = constraints
+    constructor(data: ConstraintsData, offset: number) {
+        this.data = data
         this.offset = offset
     }
 
     public get p1(): number {
-        return this.constraints.affectedParticles[this.offset*2]
+        return this.data.affectedParticles[this.offset*2]
     }
     public set p1(p1: number) {
-        this.constraints.affectedParticles[this.offset*2] = p1
+        this.data.affectedParticles[this.offset*2] = p1
     }
 
     public get p2(): number {
-        return this.constraints.affectedParticles[this.offset*2+1]
+        return this.data.affectedParticles[this.offset*2+1]
     }
     public set p2(p2: number) {
-        this.constraints.affectedParticles[this.offset*2+1] = p2
+        this.data.affectedParticles[this.offset*2+1] = p2
     }
 
     public get restValue(): number {
-        return this.constraints.restValues[this.offset]
+        return this.data.restValues[this.offset]
     }
     public set restValue(restValue: number) {
-        this.constraints.restValues[this.offset] = restValue
+        this.data.restValues[this.offset] = restValue
     }
 
     public get compliance(): number {
-        return this.constraints.compliances[this.offset]
+        return this.data.compliances[this.offset]
     }
     public set compliance(compliance: number) {
-        this.constraints.compliances[this.offset] = compliance
+        this.data.compliances[this.offset] = compliance
     }
 
     public unref(): Constraint {
@@ -58,73 +60,163 @@ export class ConstraintRef implements Constraint {
     }
 }
 
+interface ConstraintsData {
+    restValues: Float32Array
+    compliances: Float32Array
+    affectedParticles: Float32Array
+}
+
 export class Constraints {
     public count: number
 
-    public restValues: Float32Array
-    public compliances: Float32Array
-    public affectedParticles: Float32Array
-
+    public colorCount: number
     public colors: Uint32Array
 
-    private readonly adjacency: number[][]
-    private readonly max: number
+    public readonly restValueBuffer: GPUBuffer
+    public readonly complianceBuffer: GPUBuffer
+    public readonly affectedParticleBuffer: GPUBuffer
+    public readonly colorBuffer: GPUBuffer
 
-    constructor(maxConstraints: number) {
-        this.restValues = new Float32Array(maxConstraints)
-        this.compliances = new Float32Array(maxConstraints)
-        this.affectedParticles = new Float32Array(maxConstraints*2)
-        this.colors = new Uint32Array([0, 0])
+    private readonly device: GPUDevice
+    private readonly data: ConstraintsData
+
+    private readonly adjacency: number[][]
+    private readonly maxConstraints: number
+
+    constructor(device: GPUDevice, maxConstraints: number) {
+        this.device = device
+        this.data = {
+            restValues: new Float32Array(maxConstraints),
+            compliances: new Float32Array(maxConstraints),
+            affectedParticles: new Float32Array(maxConstraints * 2),
+        }
+        this.colors = new Uint32Array(maxColors * 2)
         this.adjacency = []
 
         this.count = 0
-        this.max = maxConstraints
+        this.colorCount = 0
+
+        this.maxConstraints = maxConstraints
+
+        this.restValueBuffer = device.createBuffer({
+            label: "rest-values",
+            size: fourBytesAlignment(this.data.restValues.byteLength),
+            usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+        })
+        this.complianceBuffer = this.device.createBuffer({
+            label: "compliances",
+            size: fourBytesAlignment(this.data.compliances.byteLength),
+            usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+        })
+        this.affectedParticleBuffer = this.device.createBuffer({
+            label: "affected-particles",
+            size: fourBytesAlignment(this.data.affectedParticles.byteLength),
+            usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+        })
+        this.colorBuffer = this.device.createBuffer({
+            label: "colors",
+            size: fourBytesAlignment(this.colors.byteLength),
+            usage: GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST,
+        })
+    }
+
+    public upload(): void {
+        this.color()
+
+        this.device.queue.writeBuffer(
+            this.restValueBuffer, 0,
+            this.data.restValues, 0,
+            this.count)
+
+        this.device.queue.writeBuffer(
+            this.complianceBuffer, 0,
+            this.data.compliances, 0,
+            this.count)
+
+        this.device.queue.writeBuffer(
+            this.affectedParticleBuffer, 0,
+            this.data.affectedParticles, 0,
+            2 * this.count)
+
+        this.device.queue.writeBuffer(
+            this.colorBuffer, 0,
+            this.colors, 0,
+            2 * this.colorCount)
     }
 
     public add(p1: Particle, p2: Particle, compliance: number): void {
-        if (this.count+1 > this.max) {
+        if (this.count >= this.maxConstraints) {
             throw new Error("max number of constraints reached")
         }
 
-        const c = new ConstraintRef(this, this.count)
+        const c = new ConstraintRef(this.data, this.count)
 
         c.compliance = compliance
         c.restValue = vec3.distance(p1.position, p2.position)
         c.p1 = p1.id
         c.p2 = p2.id
 
-        p1.constraintCount++
-        p2.constraintCount++
-
         this.addAdjacency(p1.id, p2.id)
         this.addAdjacency(p2.id, p1.id)
 
-        this.colors[this.colors.length-1]++
         this.count++
     }
 
-    public color(): void {
-        // Color constraints in such a way that constraints from a group are not
-        // sharing a single particle.
-        const particlesCount = this.adjacency.length
-        const constraintsCount = this.restValues.length
+    public get(i: number): ConstraintRef {
+        return new ConstraintRef(this.data, i)
+    }
 
+    public set(i: number, c: Constraint) {
+        if (i < 0 || i >= this.count) {
+            throw new Error("out of bound")
+        }
+
+        const ref = new ConstraintRef(this.data, i)
+
+        ref.compliance = c.compliance
+        ref.restValue = c.restValue
+        ref.p1 = c.p1
+        ref.p2 = c.p2
+    }
+
+    public forEach(cb: ConstraintIterator): void {
+        for (let i = 0; i < this.count; i++) {
+            cb(new ConstraintRef(this.data, i))
+        }
+    }
+
+    private addAdjacency(p1: number, p2: number): void {
+        if (p1 > this.adjacency.length - 1) {
+            for (let i = this.adjacency.length; i <= p1; i++) {
+                this.adjacency.push([])
+            }
+        }
+
+        this.adjacency[p1].push(p2)
+    }
+
+    // Color constraints in such a way that constraints from a group are not
+    // sharing a single particle.
+    private color(): void {
         const constraintColors = []
 
-        const markedConstraints = new Array<boolean>(constraintsCount).fill(false)
-        const markedParticles = new Array<boolean>(particlesCount).fill(false)
-        let remainingUnmarkedConstraints = constraintsCount
+        const markedConstraints = new Array<boolean>(this.count).fill(false)
+        const markedParticles = new Array<boolean>(this.adjacency.length).fill(false)
+        let remainingUnmarkedConstraints =  this.count
 
         while (remainingUnmarkedConstraints) {
-            const color = []
+            if (constraintColors.length >= maxColors) {
+                throw new Error("max number of colors reached")
+            }
 
+            const color = []
             markedParticles.fill(false)
 
-            for (let i = 0; i < constraintsCount; i++) {
+            for (let i = 0; i < this.count; i++) {
                 if (markedConstraints[i]) continue
 
-                const p1 = this.affectedParticles[i*2]
-                const p2 = this.affectedParticles[i*2+1]
+                const p1 = this.data.affectedParticles[i*2]
+                const p2 = this.data.affectedParticles[i*2+1]
 
                 if (markedParticles[p1] || markedParticles[p2]) continue
 
@@ -139,55 +231,31 @@ export class Constraints {
             constraintColors.push(color)
         }
 
+        // TODO: rewrite this part and avoid the unnecessary copy.
         // Rearrange constraints by color.
-        const coloredConstraints = new Constraints(constraintsCount)
-        const colors = new Uint32Array(constraintColors.length * 2)
+        const coloredConstraints = new Constraints(this.device, this.maxConstraints)
+        coloredConstraints.count = this.count
 
         let currentIdx = 0
         for (let c = 0; c < constraintColors.length; c++) {
-            colors[c*2] = currentIdx
+            this.colors[c*2] = currentIdx
 
             for (let i = 0; i < constraintColors[c].length; i++) {
                 coloredConstraints.set(currentIdx, this.get(constraintColors[c][i]))
                 currentIdx++
             }
 
-            colors[c*2+1] = currentIdx - colors[c*2]
+            this.colors[c*2+1] = currentIdx - this.colors[c*2]
         }
 
-        this.restValues = coloredConstraints.restValues
-        this.compliances = coloredConstraints.compliances
-        this.affectedParticles = coloredConstraints.affectedParticles
+        this.data.restValues = coloredConstraints.data.restValues
+        this.data.compliances = coloredConstraints.data.compliances
+        this.data.affectedParticles = coloredConstraints.data.affectedParticles
 
-        this.colors = colors
+        this.colorCount = constraintColors.length
     }
+}
 
-    public get(i: number): ConstraintRef {
-        return new ConstraintRef(this, i)
-    }
-
-    public set(i: number, c: Constraint) {
-        const ref = new ConstraintRef(this, i)
-
-        ref.compliance = c.compliance
-        ref.restValue = c.restValue
-        ref.p1 = c.p1
-        ref.p2 = c.p2
-    }
-
-    public forEach(cb: ConstraintIterator): void {
-        for (let i = 0; i < this.count; i++) {
-            cb(new ConstraintRef(this, i))
-        }
-    }
-
-    private addAdjacency(p1: number, p2: number): void {
-        if (p1 > this.adjacency.length - 1) {
-            for (let i = this.adjacency.length; i <= p1; i++) {
-                this.adjacency.push([])
-            }
-        }
-
-        this.adjacency[p1].push(p2)
-    }
+function fourBytesAlignment(size: number): number {
+    return (size + 3) & ~3
 }
