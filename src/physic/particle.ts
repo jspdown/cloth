@@ -150,7 +150,3 @@ export class Particles {
         }
     }
 }
-
-function fourBytesAlignment(size: number): number {
-    return (size + 3) & ~3
-}

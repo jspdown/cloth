@@ -1,7 +1,6 @@
 import * as vec3 from "./math/vector3"
 import * as mat4 from "./math/matrix4"
 import * as scalar from "./math/scalar"
-import {Vector3} from "./math/vector3"
 
 // Config holds the configuration of the camera.
 export interface Config {

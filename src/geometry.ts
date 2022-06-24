@@ -1,6 +1,6 @@
 import * as vec3 from "./math/vector3"
 
-import {Vertices, VertexRef} from "./vertex"
+import {Vertices} from "./vertex"
 import {logger} from "./logger";
 
 // Geometry holds a mesh geometry.

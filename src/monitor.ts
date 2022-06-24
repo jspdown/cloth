@@ -1,4 +1,3 @@
-
 const movingAverageLength = 5
 const renderInterval = 200
 

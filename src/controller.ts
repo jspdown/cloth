@@ -1,15 +1,12 @@
-import {CPUSolver, CPUSolverConfig, CPUSolverMethod} from "./physic/cpu_solver"
-import {GPUSolver, GPUSolverConfig} from "./physic/gpu_solver"
+import {Solver, SolverConfig} from "./physic/solver"
 import {buildPlaneGeometry} from "./geometry"
 import {logger} from "./logger"
 import {App} from "./app"
 
 interface Config {
     paused: boolean
-    solverType: SolverType
 
-    cpuSolver: CPUSolverConfig
-    gpuSolver: GPUSolverConfig
+    solver: SolverConfig
 
     cloth: ClothConfig
 }
@@ -23,11 +20,6 @@ interface ClothConfig {
     heightDivisions: number
     stretchCompliance: number
     bendCompliance: number
-}
-
-enum SolverType {
-    CPU = "cpu",
-    GPU = "gpu",
 }
 
 export class Controller {
@@ -49,14 +41,7 @@ export class Controller {
 
         this.config = {
             paused: true,
-            solverType: SolverType.GPU,
-            cpuSolver: {
-                deltaTime: 1/60,
-                subSteps: 15,
-                relaxation: 1,
-                method: CPUSolverMethod.GaussSeidel,
-            },
-            gpuSolver: {
+            solver: {
                 deltaTime: 1/60,
                 subSteps: 10,
                 relaxation: 1,
@@ -97,8 +82,6 @@ export class Controller {
         const playButton = document.getElementById("play")
         const restartButton = document.getElementById("restart")
         const applyButton = document.getElementById("apply")
-        const solverTypeInput = document.getElementById("solver-type")
-        const cpuMethodInput = document.getElementById("cpu-method")
 
         playButton.addEventListener("click", (e) => {
             e.preventDefault()
@@ -114,14 +97,6 @@ export class Controller {
             e.preventDefault()
 
             this.apply()
-        })
-
-        solverTypeInput.addEventListener("change", () => {
-            this.config = this.buildConfiguration()
-        })
-
-        cpuMethodInput && cpuMethodInput.addEventListener("change", () => {
-            this.config = this.buildConfiguration()
         })
     }
 
@@ -200,18 +175,14 @@ export class Controller {
                     </div>
 
                     <div class="column">
-                        <label for="solver-type">
-                            <span>solver type</span>
-                            <select id="solver-type" name="solver-type">
-                                <option ${this.config.solverType === SolverType.CPU ? "selected" : ""} value=${SolverType.CPU}>CPU</option>
-                                <option ${this.config.solverType === SolverType.GPU ? "selected" : ""} value=${SolverType.GPU}>GPU</option>
-                            </select>
+                        <label for="solver-sub-steps">
+                            <span>sub-steps</span>
+                            <input type="number" id="solver-sub-steps" name="solver-sub-steps"
+                                value=${this.config.solver.subSteps}
+                                step=1
+                                min=1
+                                max=500 />
                         </label>
-
-                        ${this.config.solverType === SolverType.CPU
-                            ? this.renderCPUSolverForm()
-                            : this.renderGPUSolverForm()
-                        }
                     </div>
                 </div>
 
@@ -224,57 +195,6 @@ export class Controller {
         `
     }
 
-    private renderCPUSolverForm(): string {
-        const jacobiFields = `
-            <div>
-                <label for="cpu-relaxation">
-                        <span>relaxation</span>
-                        <input type="number" id="cpu-relaxation" name="cpu-relaxation"
-                            value=${this.config.cpuSolver.relaxation}
-                            step=0.05
-                            min=0
-                            max=2 />
-                </label>
-            </div>
-        `
-        return `
-            <div>
-                <label for="cpu-method">
-                    <span>method</span>
-                    <select id="cpu-method" name="cpu-method">
-                        <option ${this.config.cpuSolver.method === CPUSolverMethod.Jacobi ? "selected" : ""} value=${CPUSolverMethod.Jacobi}>Jacobi</option>
-                        <option ${this.config.cpuSolver.method === CPUSolverMethod.GaussSeidel ? "selected" : ""} value=${CPUSolverMethod.GaussSeidel}>Gauss-Seidel</option>
-                    </select>
-                </label>
-                <label for="cpu-sub-steps">
-                    <span>sub-steps</span>
-                    <input type="number" id="cpu-sub-steps" name="cpu-sub-steps"
-                        value=${this.config.cpuSolver.subSteps}
-                        step=1
-                        min=1
-                        max=500 />
-                </label>
-
-                ${this.config.cpuSolver.method === CPUSolverMethod.Jacobi ? jacobiFields : ""}
-            </div>
-        `
-    }
-
-    private renderGPUSolverForm(): string {
-        return `
-            <div>
-                <label for="gpu-sub-steps">
-                    <span>sub-steps</span>
-                    <input type="number" id="gpu-sub-steps" name="gpu-sub-steps"
-                        value=${this.config.gpuSolver.subSteps}
-                        step=1
-                        min=1
-                        max=500 />
-                </label>
-            </div>
-        `
-    }
-
     private updateApp(config: Config, forced: boolean = false) {
         const clothGeometryChanged = config.cloth.width !== this.config.cloth.width
             || config.cloth.height !== this.config.cloth.height
@@ -284,6 +204,8 @@ export class Controller {
             || config.cloth.bendCompliance !== this.config.cloth.bendCompliance
             || config.cloth.unit !== this.config.cloth.unit
             || config.cloth.density !== this.config.cloth.density
+        const solverConfigChanged = config.solver.subSteps !== this.config.solver.subSteps
+
 
         if (forced || clothGeometryChanged) {
             logger.info("resetting the simulation with a new cloth geometry")
@@ -304,11 +226,10 @@ export class Controller {
             }
         }
 
-        this.app.solver = config.solverType === SolverType.CPU
-            ? new CPUSolver(config.cpuSolver)
-            : new GPUSolver(config.gpuSolver, this.device, this.limits)
-
-        this.app.solver.add(this.app.cloth)
+        if (forced || solverConfigChanged || clothGeometryChanged || clothConfigChanged) {
+            this.app.solver = new Solver(config.solver, this.device, this.limits)
+            this.app.solver.add(this.app.cloth)
+        }
     }
 
     private buildConfiguration(): Config {
@@ -317,7 +238,6 @@ export class Controller {
         const config: Config = {
             ...this.config,
 
-            solverType: data.get("solver-type") as SolverType,
             cloth: {
                 unit: parseFloat(data.get("cloth-unit") as string),
                 density: parseFloat(data.get("cloth-density") as string),
@@ -327,28 +247,12 @@ export class Controller {
                 heightDivisions: parseInt(data.get("cloth-height-divisions") as string),
                 stretchCompliance: parseFloat(data.get("cloth-stretch-compliance") as string),
                 bendCompliance: parseFloat(data.get("cloth-bend-compliance") as string),
-            }
-        }
+            },
+            solver: {
+                ...this.config.solver,
 
-        if (this.config.solverType === SolverType.CPU) {
-            config.cpuSolver = {
-                ...this.config.cpuSolver,
-
-                method: data.get("cpu-method") as CPUSolverMethod,
-                subSteps: parseInt(data.get("cpu-sub-steps") as string),
-            }
-
-            if (this.config.cpuSolver.method === CPUSolverMethod.Jacobi) {
-                config.cpuSolver.relaxation = parseFloat(data.get("cpu-relaxation") as string)
-            }
-        }
-
-        if (this.config.solverType === SolverType.GPU) {
-            config.gpuSolver = {
-                ...this.config.gpuSolver,
-
-                subSteps: parseInt(data.get("gpu-sub-steps") as string),
-            }
+                subSteps: parseInt(data.get("solver-sub-steps") as string),
+            },
         }
 
         this.renderNeeded = true

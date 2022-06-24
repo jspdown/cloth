@@ -8,7 +8,6 @@ import {Renderer} from "./renderer"
 import {monitor} from "./monitor";
 import {buildPlaneGeometry} from "./geometry";
 import {Solver} from "./physic/solver";
-import {CPUSolver, CPUSolverMethod} from "./physic/cpu_solver";
 
 // App is the application.
 export class App {
@@ -23,7 +22,7 @@ export class App {
 
     private stopped: boolean
 
-    constructor(canvas: HTMLCanvasElement, device: GPUDevice) {
+    constructor(canvas: HTMLCanvasElement, device: GPUDevice, limits: GPUSupportedLimits) {
         this.canvas = canvas
         this.device = device
         this.paused = true
@@ -35,12 +34,12 @@ export class App {
         })
 
         this.renderer = new Renderer(canvas, device)
-        this.solver = new CPUSolver({
+        this.solver = new Solver({
             deltaTime: 1/60,
             subSteps: 15,
             relaxation: 1,
-            method: CPUSolverMethod.GaussSeidel,
-        })
+            gravity: vec3.create(0, -9.8, 0),
+        }, this.device, limits)
 
          const geometry = buildPlaneGeometry(this.device, 10, 10, 30, 30)
 
