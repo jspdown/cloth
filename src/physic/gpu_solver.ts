@@ -1,13 +1,13 @@
-import applyConstraintComputeShaderCode from "./shaders/apply_constraint.compute.wgsl"
 import semiExplicitEulerComputeShaderCode from "./shaders/semi_explicit_euler.compute.wgsl"
+import applyConstraintComputeShaderCode from "./shaders/apply_constraint.compute.wgsl"
 import updatePositionComputeShaderCode from "./shaders/update_position.compute.wgsl"
+import updateNormalComputeShaderCode from "./shaders/update_normal.compute.wgsl"
 
 import * as vec3 from "../math/vector3"
 import {Vector3} from "../math/vector3"
 
 import {Cloth} from "./cloth"
 import {Solver} from "./solver"
-import {Vector3Ref} from "./particle"
 
 const f32Size = 4
 const u32Size = 4
@@ -24,7 +24,9 @@ interface PhysicObject {
 
     configBuffer: GPUBuffer
 
+    indexBuffer: GPUBuffer
     positionBuffer: GPUBuffer
+    normalBuffer: GPUBuffer
     estimatedPositionBuffer: GPUBuffer
     velocityBuffer: GPUBuffer
     inverseMasseBuffer: GPUBuffer
@@ -37,6 +39,7 @@ interface PhysicObject {
     eulerBindGroup: GPUBindGroup
     constraintBindGroup: GPUBindGroup
     positionBindGroup: GPUBindGroup
+    normalBindGroup: GPUBindGroup
     configBindGroup: GPUBindGroup
     colorBindGroup: GPUBindGroup
 }
@@ -51,6 +54,7 @@ export class GPUSolver implements Solver {
     private readonly applyConstraintPipeline: GPUComputePipeline
     private readonly semiExplicitEulerPipeline: GPUComputePipeline
     private readonly updatePositionPipeline: GPUComputePipeline
+    private readonly updateNormalPipeline: GPUComputePipeline
     private readonly configLayout: GPUBindGroupLayout
 
     constructor(config: GPUSolverConfig, device: GPUDevice, limits: GPUSupportedLimits) {
@@ -68,6 +72,7 @@ export class GPUSolver implements Solver {
         const applyConstraintShaderModule = device.createShaderModule({ code: applyConstraintComputeShaderCode })
         const semiExplicitEulerShaderModule = device.createShaderModule({ code: semiExplicitEulerComputeShaderCode })
         const updatePositionShaderModule = device.createShaderModule({ code: updatePositionComputeShaderCode })
+        const updateNormalShaderModule = device.createShaderModule({ code: updateNormalComputeShaderCode })
 
         this.configLayout = device.createBindGroupLayout({
             label: "config-layout",
@@ -148,17 +153,33 @@ export class GPUSolver implements Solver {
                 entryPoint: "main",
             },
         })
+        this.updateNormalPipeline = device.createComputePipeline({
+            label: "update-normal-compute-pipeline",
+            layout: device.createPipelineLayout({
+                label: "update-normal-pipeline-layout",
+                bindGroupLayouts: [
+                    device.createBindGroupLayout({
+                        label: "update-normal-data-layout",
+                        entries: [
+                            {binding: 0, visibility: GPUShaderStage.COMPUTE, buffer: { type: "read-only-storage" } },
+                            {binding: 1, visibility: GPUShaderStage.COMPUTE, buffer: { type: "read-only-storage" } },
+                            {binding: 2, visibility: GPUShaderStage.COMPUTE, buffer: { type: "storage" } },
+                        ],
+                    }),
+                ],
+            }),
+            compute: {
+                module: updateNormalShaderModule,
+                entryPoint: "update_normal",
+            },
+        })
     }
 
     public async solve(): Promise<void> {
         for (let object of this.objects) {
-            const positionReadBuffer = this.device.createBuffer({
-                label: "position-read-buffer",
-                size: fourBytesAlignment(object.cloth.particles.positions.length * f32Size),
-                usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
-            })
-
             const encoder = this.device.createCommandEncoder()
+
+            encoder.clearBuffer(object.cloth.geometry.normalBuffer)
 
             for (let subStep = 0; subStep < this.config.subSteps; subStep++) {
                 this.semiExplicitEuler(encoder, object)
@@ -166,15 +187,11 @@ export class GPUSolver implements Solver {
                 this.updatePositions(encoder, object)
             }
 
-            encoder.copyBufferToBuffer(object.positionBuffer, 0, positionReadBuffer, 0, object.cloth.particles.positions.byteLength)
+            this.updateNormals(encoder, object)
 
             this.device.queue.submit([encoder.finish()])
 
-            await positionReadBuffer.mapAsync(GPUMapMode.READ)
-            object.cloth.particles.positions.set(new Float32Array(positionReadBuffer.getMappedRange()))
-            positionReadBuffer.unmap()
-
-            object.cloth.updatePositionsAndNormals()
+            await this.device.queue.onSubmittedWorkDone()
         }
     }
 
@@ -232,7 +249,21 @@ export class GPUSolver implements Solver {
 
         passEncoder.end()
     }
-    
+
+    private updateNormals(encoder: GPUCommandEncoder, object: PhysicObject) {
+        let passEncoder = encoder.beginComputePass()
+
+        passEncoder.setPipeline(this.updateNormalPipeline)
+        passEncoder.setBindGroup(0, object.normalBindGroup)
+
+        let dispatch = Math.sqrt(object.cloth.geometry.indexes.length/3)
+        let dispatchX = Math.ceil(dispatch/16)
+        let dispatchY = Math.ceil(dispatch/16)
+
+        passEncoder.dispatchWorkgroups(dispatchX, dispatchY)
+        passEncoder.end()
+    }
+
     public add(cloth: Cloth): void {
         cloth.constraints.color()
 
@@ -250,11 +281,6 @@ export class GPUSolver implements Solver {
             label: "config-buffer",
             size: fourBytesAlignment(config.length * f32Size),
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-        })
-        const positionBuffer = this.device.createBuffer({
-            label: "position-buffer",
-            size: fourBytesAlignment(cloth.particles.positions.length * f32Size),
-            usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST,
         })
         const estimatedPositionBuffer = this.device.createBuffer({
             label: "estimated-position-buffer",
@@ -298,7 +324,6 @@ export class GPUSolver implements Solver {
         });
 
         this.writeAllBuffer(configBuffer, config)
-        this.writeAllBuffer(positionBuffer, cloth.particles.positions)
         this.writeAllBuffer(velocityBuffer, cloth.particles.velocities)
         this.writeAllBuffer(inverseMasseBuffer, cloth.particles.inverseMasses)
         this.writeAllBuffer(restValueBuffer, cloth.constraints.restValues)
@@ -309,7 +334,7 @@ export class GPUSolver implements Solver {
         const eulerBindGroup = this.device.createBindGroup({
             layout: this.semiExplicitEulerPipeline.getBindGroupLayout(0),
             entries: [
-                { binding: 0, resource: { buffer: positionBuffer } },
+                { binding: 0, resource: { buffer: cloth.geometry.positionBuffer } },
                 { binding: 1, resource: { buffer: estimatedPositionBuffer } },
                 { binding: 2, resource: { buffer: velocityBuffer } },
                 { binding: 3, resource: { buffer: inverseMasseBuffer } },
@@ -328,9 +353,17 @@ export class GPUSolver implements Solver {
         const positionBindGroup = this.device.createBindGroup({
             layout: this.updatePositionPipeline.getBindGroupLayout(0),
             entries: [
-                { binding: 0, resource: { buffer: positionBuffer } },
+                { binding: 0, resource: { buffer: cloth.geometry.positionBuffer } },
                 { binding: 1, resource: { buffer: estimatedPositionBuffer } },
                 { binding: 2, resource: { buffer: velocityBuffer } },
+            ],
+        })
+        const normalBindGroup = this.device.createBindGroup({
+            layout: this.updateNormalPipeline.getBindGroupLayout(0),
+            entries: [
+                { binding: 0, resource: { buffer: cloth.geometry.positionBuffer } },
+                { binding: 1, resource: { buffer: cloth.geometry.indexBuffer } },
+                { binding: 2, resource: { buffer: cloth.geometry.normalBuffer } },
             ],
         })
 
@@ -351,7 +384,10 @@ export class GPUSolver implements Solver {
         this.objects.push({
             cloth,
 
-            positionBuffer,
+            indexBuffer: cloth.geometry.indexBuffer,
+            positionBuffer: cloth.geometry.positionBuffer,
+            normalBuffer: cloth.geometry.normalBuffer,
+
             estimatedPositionBuffer,
             velocityBuffer,
             inverseMasseBuffer,
@@ -365,6 +401,7 @@ export class GPUSolver implements Solver {
             eulerBindGroup,
             constraintBindGroup,
             positionBindGroup,
+            normalBindGroup,
             configBindGroup,
             colorBindGroup,
         })

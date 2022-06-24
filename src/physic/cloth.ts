@@ -127,14 +127,6 @@ export class Cloth {
     }
     public get rotation(): Vector3 { return this._rotation }
 
-    public set wireframe(wireframe: boolean) {
-        this._geometry.wireframe = wireframe
-        this.renderPipeline = null
-    }
-    public get wireframe(): boolean {
-        return this._geometry.wireframe
-    }
-
     // updatePositionsAndNormals updates the vertex positions and normals based
     // on particles positions.
     public updatePositionsAndNormals(): void {
@@ -153,18 +145,16 @@ export class Cloth {
             const papb = vec3.sub(pb.position, pa.position)
             const papc = vec3.sub(pc.position, pa.position)
 
-            const faceNormal = vec3.cross(papb, papc)
+            const faceNormal = vec3.multiplyByScalarMut(vec3.cross(papb, papc), 10000)
 
             vec3.addMut(pa.normal, faceNormal)
             vec3.addMut(pb.normal, faceNormal)
             vec3.addMut(pc.normal, faceNormal)
         }
 
-        this._geometry.vertices.forEach((vertex: Vertex): void => {
-            vec3.normalizeMut(vertex.normal)
-
-            vertex.color = vertex.normal
-        })
+        // this._geometry.vertices.forEach((vertex: Vertex): void => {
+        //     vec3.normalizeMut(vertex.normal)
+        // })
 
         this._geometry.upload()
     }
@@ -222,10 +212,14 @@ export class Cloth {
                 buffers: [{
                     attributes: [
                         { shaderLocation: 0, offset: 0, format: "float32x3" as const },
-                        { shaderLocation: 1, offset: 3*4, format: "float32x3" as const },
-                        { shaderLocation: 2, offset: 2*3*4, format: "float32x3" as const },
                     ],
-                    arrayStride: 3*3*4,
+                    arrayStride: 4*4,
+                    stepMode: "vertex" as const
+                }, {
+                    attributes: [
+                        { shaderLocation: 1, offset: 0, format: "sint32x3" as const },
+                    ],
+                    arrayStride: 4*4,
                     stepMode: "vertex" as const
                 }]
             },
@@ -237,7 +231,7 @@ export class Cloth {
             primitive: {
                 frontFace: "cw",
                 cullMode: "none",
-                topology: this._geometry.primitive,
+                topology: "triangle-list",
             },
             depthStencil: {
                 depthWriteEnabled: true,

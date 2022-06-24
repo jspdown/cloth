@@ -63,14 +63,15 @@ export class Renderer {
         passEncoder.setPipeline(pipeline)
         passEncoder.setViewport(0, 0, width, height, 0, 1)
         passEncoder.setScissorRect(0, 0, width, height)
-        passEncoder.setVertexBuffer(0, geometry.vertexBuffer)
+        passEncoder.setVertexBuffer(0, geometry.positionBuffer)
+        passEncoder.setVertexBuffer(1, geometry.normalBuffer)
         passEncoder.setIndexBuffer(geometry.indexBuffer, "uint32")
 
         for (let i = 0; i < bindGroups.length; i++) {
             passEncoder.setBindGroup(i, bindGroups[i])
         }
 
-        passEncoder.drawIndexed(geometry.indexCount)
+        passEncoder.drawIndexed(geometry.indexes.length)
         passEncoder.end()
 
         this.device.queue.submit([commandEncoder.finish()])

@@ -85,10 +85,6 @@ export class Controller {
                 case "Space":
                     this.togglePlay()
                     break
-                case "KeyW":
-                    this.app.cloth.wireframe = !this.app.cloth.wireframe
-                    logger.info(`wireframe mode **${this.app.cloth.wireframe ? "enabled" : "disabled"}**`)
-                    break
             }
         })
     }
@@ -311,6 +307,7 @@ export class Controller {
         this.app.solver = config.solverType === SolverType.CPU
             ? new CPUSolver(config.cpuSolver)
             : new GPUSolver(config.gpuSolver, this.device, this.limits)
+
         this.app.solver.add(this.app.cloth)
     }
 
