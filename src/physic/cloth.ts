@@ -67,7 +67,7 @@ export class Cloth {
 
     public set geometry(geometry: Geometry) {
         this._geometry = geometry
-        this.particles = buildParticles(this._geometry, this._config.unit, this._config.density)
+        this.particles = buildParticles(this.device, this._geometry, this._config.unit, this._config.density)
         this.constraints = buildConstraints(this.device, this._geometry, this.particles, this._config.stretchCompliance, this._config.bendCompliance)
 
         logger.info(`vertices: **${this._geometry.vertices.count}**`)
@@ -103,7 +103,7 @@ export class Cloth {
         })
 
         if (particlesNeedsUpdate) {
-            this.particles = buildParticles(this._geometry, cfg.unit, cfg.density)
+            this.particles = buildParticles(this.device, this._geometry, cfg.unit, cfg.density)
         }
         if (constraintsNeedsUpdate) {
             this.constraints = buildConstraints(this.device, this._geometry, this.particles, cfg.stretchCompliance, cfg.bendCompliance)
@@ -256,8 +256,8 @@ export class Cloth {
     }
 }
 
-function buildParticles(geometry: Geometry, unit: number, density: number): Particles {
-    const particles = new Particles(geometry.vertices.count)
+function buildParticles(device: GPUDevice, geometry: Geometry, unit: number, density: number): Particles {
+    const particles = new Particles(device, geometry.vertices.count)
 
     geometry.vertices.forEach((vertex: Vertex) => {
         particles.add({

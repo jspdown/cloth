@@ -8,7 +8,6 @@ import {Vector3} from "../math/vector3"
 
 import {Cloth} from "./cloth"
 
-const f32Size = 4
 const u32Size = 4
 
 export interface SolverConfig {
@@ -20,10 +19,6 @@ export interface SolverConfig {
 
 interface PhysicObject {
     cloth: Cloth
-
-    estimatedPositionBuffer: GPUBuffer
-    velocityBuffer: GPUBuffer
-    inverseMasseBuffer: GPUBuffer
 
     eulerBindGroup: GPUBindGroup
     constraintBindGroup: GPUBindGroup
@@ -64,15 +59,11 @@ export class Solver {
             this.config.gravity.x, this.config.gravity.y, this.config.gravity.z,
             this.config.deltaTime / this.config.subSteps,
         ])
-
         this.configBuffer = this.device.createBuffer({
             label: "config",
-            size: fourBytesAlignment(configData.length * f32Size),
+            size: fourBytesAlignment(configData.byteLength),
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
         })
-
-        this.writeAllBuffer(this.configBuffer, configData)
-
         const configLayout = device.createBindGroupLayout({
             label: "config",
             entries: [
@@ -86,19 +77,21 @@ export class Solver {
                 { binding: 0, resource: { buffer: this.configBuffer } },
             ],
         })
+        this.writeAllBuffer(this.configBuffer, configData)
 
         this.colorBuffer = this.device.createBuffer({
-            label: "color-buffer",
-            size: fourBytesAlignment(2 * f32Size),
+            label: "current-color",
+            size: fourBytesAlignment(2 * u32Size),
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
         })
         const colorLayout = device.createBindGroupLayout({
-            label: "color-layout",
+            label: "current-color",
             entries: [
                 {binding: 0, visibility: GPUShaderStage.COMPUTE, buffer: { type: "uniform" } },
             ],
         })
         this.colorBindGroup = this.device.createBindGroup({
+            label: "current-color",
             layout: colorLayout,
             entries: [
                 { binding: 0, resource: { buffer: this.colorBuffer } },
@@ -111,12 +104,12 @@ export class Solver {
         const updateNormalShaderModule = device.createShaderModule({ code: updateNormalComputeShaderCode })
 
         this.semiExplicitEulerPipeline = device.createComputePipeline({
-            label: "semi-explicit-euler-compute-pipeline",
+            label: "semi-explicit-euler",
             layout: device.createPipelineLayout({
-                label: "semi-explicit-euler-pipeline-layout",
+                label: "semi-explicit-euler",
                 bindGroupLayouts: [
                     device.createBindGroupLayout({
-                        label: "semi-explicit-euler-data-layout",
+                        label: "semi-explicit-euler",
                         entries: [
                             {binding: 0, visibility: GPUShaderStage.COMPUTE, buffer: { type: "read-only-storage" } },
                             {binding: 1, visibility: GPUShaderStage.COMPUTE, buffer: { type: "storage" } },
@@ -133,12 +126,12 @@ export class Solver {
             },
         })
         this.applyConstraintPipeline = device.createComputePipeline({
-            label: "apply-constraint-compute-pipeline",
+            label: "apply-constraint",
             layout: device.createPipelineLayout({
-                label: "apply-constraint-pipeline-layout",
+                label: "apply-constraint",
                 bindGroupLayouts: [
                     device.createBindGroupLayout({
-                        label: "apply-constraint-data-layout",
+                        label: "apply-constraint",
                         entries: [
                             {binding: 0, visibility: GPUShaderStage.COMPUTE, buffer: { type: "storage" } },
                             {binding: 1, visibility: GPUShaderStage.COMPUTE, buffer: { type: "read-only-storage" } },
@@ -157,12 +150,12 @@ export class Solver {
             },
         })
         this.updatePositionPipeline = device.createComputePipeline({
-            label: "update-position-compute-pipeline",
+            label: "update-position",
             layout: device.createPipelineLayout({
-                label: "update-position-pipeline-layout",
+                label: "update-position",
                 bindGroupLayouts: [
                     device.createBindGroupLayout({
-                        label: "update-position-data-layout",
+                        label: "update-position",
                         entries: [
                             {binding: 0, visibility: GPUShaderStage.COMPUTE, buffer: { type: "storage" } },
                             {binding: 1, visibility: GPUShaderStage.COMPUTE, buffer: { type: "read-only-storage" } },
@@ -178,12 +171,12 @@ export class Solver {
             },
         })
         this.updateNormalPipeline = device.createComputePipeline({
-            label: "update-normal-compute-pipeline",
+            label: "update-normal",
             layout: device.createPipelineLayout({
-                label: "update-normal-pipeline-layout",
+                label: "update-normal",
                 bindGroupLayouts: [
                     device.createBindGroupLayout({
-                        label: "update-normal-data-layout",
+                        label: "update-normal",
                         entries: [
                             {binding: 0, visibility: GPUShaderStage.COMPUTE, buffer: { type: "read-only-storage" } },
                             {binding: 1, visibility: GPUShaderStage.COMPUTE, buffer: { type: "read-only-storage" } },
@@ -236,9 +229,7 @@ export class Solver {
     }
 
     private applyConstraints(encoder: GPUCommandEncoder, object: PhysicObject) {
-        const colors = object.cloth.constraints.colors
-
-        for (let i = 0; i < colors.length/2; i++) {
+        for (let i = 0; i < object.cloth.constraints.colorCount; i++) {
             encoder.copyBufferToBuffer(object.cloth.constraints.colorBuffer, i*2*u32Size, this.colorBuffer, 0, 2*u32Size);
 
             const passEncoder = encoder.beginComputePass()
@@ -248,7 +239,7 @@ export class Solver {
             passEncoder.setBindGroup(1, this.configBindGroup)
             passEncoder.setBindGroup(2, this.colorBindGroup)
 
-            const dispatch = Math.sqrt(colors[i*2+1])
+            const dispatch = Math.sqrt(object.cloth.constraints.colors[i*2+1])
             const dispatchX = Math.ceil(dispatch/16)
             const dispatchY = Math.ceil(dispatch/16)
 
@@ -289,41 +280,23 @@ export class Solver {
     }
 
     public add(cloth: Cloth): void {
+        cloth.particles.upload()
         cloth.constraints.upload()
-
-        const estimatedPositionBuffer = this.device.createBuffer({
-            label: "estimated-position-buffer",
-            size: fourBytesAlignment(cloth.particles.estimatedPositions.length * f32Size),
-            usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
-        })
-        const velocityBuffer = this.device.createBuffer({
-            label: "velocity-buffer",
-            size: fourBytesAlignment(cloth.particles.velocities.length * f32Size),
-            usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST,
-        })
-        const inverseMasseBuffer = this.device.createBuffer({
-            label: "inverse-masses-buffer",
-            size: fourBytesAlignment(cloth.particles.inverseMasses.length * f32Size),
-            usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
-        })
-
-        this.writeAllBuffer(velocityBuffer, cloth.particles.velocities)
-        this.writeAllBuffer(inverseMasseBuffer, cloth.particles.inverseMasses)
 
         const eulerBindGroup = this.device.createBindGroup({
             layout: this.semiExplicitEulerPipeline.getBindGroupLayout(0),
             entries: [
                 { binding: 0, resource: { buffer: cloth.geometry.positionBuffer } },
-                { binding: 1, resource: { buffer: estimatedPositionBuffer } },
-                { binding: 2, resource: { buffer: velocityBuffer } },
-                { binding: 3, resource: { buffer: inverseMasseBuffer } },
+                { binding: 1, resource: { buffer: cloth.particles.estimatedPositionBuffer } },
+                { binding: 2, resource: { buffer: cloth.particles.velocityBuffer } },
+                { binding: 3, resource: { buffer: cloth.particles.inverseMassBuffer } },
             ],
         })
         const constraintBindGroup = this.device.createBindGroup({
             layout: this.applyConstraintPipeline.getBindGroupLayout(0),
             entries: [
-                { binding: 0, resource: { buffer: estimatedPositionBuffer } },
-                { binding: 1, resource: { buffer: inverseMasseBuffer } },
+                { binding: 0, resource: { buffer: cloth.particles.estimatedPositionBuffer } },
+                { binding: 1, resource: { buffer: cloth.particles.inverseMassBuffer } },
                 { binding: 2, resource: { buffer: cloth.constraints.restValueBuffer } },
                 { binding: 3, resource: { buffer: cloth.constraints.complianceBuffer } },
                 { binding: 4, resource: { buffer: cloth.constraints.affectedParticleBuffer } },
@@ -333,8 +306,8 @@ export class Solver {
             layout: this.updatePositionPipeline.getBindGroupLayout(0),
             entries: [
                 { binding: 0, resource: { buffer: cloth.geometry.positionBuffer } },
-                { binding: 1, resource: { buffer: estimatedPositionBuffer } },
-                { binding: 2, resource: { buffer: velocityBuffer } },
+                { binding: 1, resource: { buffer: cloth.particles.estimatedPositionBuffer } },
+                { binding: 2, resource: { buffer: cloth.particles.velocityBuffer } },
             ],
         })
         const normalBindGroup = this.device.createBindGroup({
@@ -348,10 +321,6 @@ export class Solver {
 
         this.objects.push({
             cloth,
-
-            estimatedPositionBuffer,
-            velocityBuffer,
-            inverseMasseBuffer,
 
             eulerBindGroup,
             constraintBindGroup,

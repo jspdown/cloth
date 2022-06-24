@@ -98,7 +98,7 @@ export class Constraints {
 
         this.maxConstraints = maxConstraints
 
-        this.restValueBuffer = device.createBuffer({
+        this.restValueBuffer = this.device.createBuffer({
             label: "rest-values",
             size: fourBytesAlignment(this.data.restValues.byteLength),
             usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
