@@ -55,30 +55,30 @@ export class App {
     public async run(): Promise<void> {
         this.stopped = false
 
-        const tickTimer = monitor.createTimer("tick")
-        const physicTimer = monitor.createTimer("physic")
+        const timer = monitor.createTimer("tick")
 
         do {
+            timer.end()
             await sleep()
+            timer.start()
 
-            tickTimer.start()
+            const encoder = this.device.createCommandEncoder()
 
             if (!this.paused) {
-                physicTimer.start()
-                await this.solver.solve()
-                physicTimer.end()
+                await this.solver.solve(encoder)
             }
 
             const pipeline = this.cloth.getRenderPipeline(this.camera)
 
             if (pipeline) {
-                this.renderer.render(this.cloth.geometry, pipeline, [
+                this.renderer.render(encoder, this.cloth.geometry, pipeline, [
                     this.camera.uniformBindGroup,
                     this.cloth.uniformBindGroup,
                 ])
             }
 
-            tickTimer.end()
+            this.device.queue.submit([encoder.finish()])
+            await this.device.queue.onSubmittedWorkDone()
         } while (!this.stopped)
     }
 

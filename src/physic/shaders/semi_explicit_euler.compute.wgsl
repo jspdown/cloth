@@ -1,4 +1,4 @@
-struct Config {
+struct SolverConfig {
     gravity: vec3<f32>,
     deltaTime: f32,
 };
@@ -8,7 +8,7 @@ struct Config {
 @group(0) @binding(2) var<storage, read_write> velocities: array<vec3<f32>>;
 @group(0) @binding(3) var<storage, read> inverseMasses: array<f32>;
 
-@group(1) @binding(0) var<uniform> config: Config;
+@group(1) @binding(0) var<uniform> solverConfig: SolverConfig;
 
 @stage(compute) @workgroup_size(16, 16)
 fn main(@builtin(num_workgroups) workgroup_size: vec3<u32>, @builtin(global_invocation_id) global_id: vec3<u32>) {
@@ -25,8 +25,8 @@ fn main(@builtin(num_workgroups) workgroup_size: vec3<u32>, @builtin(global_invo
     }
 
     if (inverseMasses[id] > 0.0) {
-        velocities[id] += config.gravity * config.deltaTime;
+        velocities[id] += solverConfig.gravity * solverConfig.deltaTime;
     }
 
-    estimatedPositions[id] = positions[id] + velocities[id] * config.deltaTime;
+    estimatedPositions[id] = positions[id] + velocities[id] * solverConfig.deltaTime;
 }

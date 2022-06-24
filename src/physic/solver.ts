@@ -180,90 +180,74 @@ export class Solver {
         })
     }
 
-    public async solve(): Promise<void> {
+    public async solve(encoder: GPUCommandEncoder): Promise<void> {
         for (let object of this.objects) {
-            const encoder = this.device.createCommandEncoder()
-
             encoder.clearBuffer(object.cloth.geometry.normalBuffer)
 
+            const passEncoder = encoder.beginComputePass()
+
+            passEncoder.setBindGroup(1, this.configBindGroup)
+
             for (let subStep = 0; subStep < this.config.subSteps; subStep++) {
-                this.semiExplicitEuler(encoder, object)
-                this.applyConstraints(encoder, object)
-                this.updatePositions(encoder, object)
+                this.semiExplicitEuler(passEncoder, object)
+                this.applyConstraints(passEncoder, object)
+                this.updatePositions(passEncoder, object)
             }
 
-            this.updateNormals(encoder, object)
+            this.updateNormals(passEncoder, object)
 
-            this.device.queue.submit([encoder.finish()])
-
-            await this.device.queue.onSubmittedWorkDone()
+            passEncoder.end()
         }
     }
 
-    private semiExplicitEuler(encoder: GPUCommandEncoder, object: PhysicObject) {
-        const passEncoder = encoder.beginComputePass()
-
-        passEncoder.setPipeline(this.semiExplicitEulerPipeline)
-        passEncoder.setBindGroup(0, object.eulerBindGroup)
-        passEncoder.setBindGroup(1, this.configBindGroup)
+    private semiExplicitEuler(encoder: GPUComputePassEncoder, object: PhysicObject) {
+        encoder.setPipeline(this.semiExplicitEulerPipeline)
+        encoder.setBindGroup(0, object.eulerBindGroup)
 
         const dispatch = Math.sqrt(object.cloth.particles.count)
         const dispatchX = Math.ceil(dispatch/16)
         const dispatchY = Math.ceil(dispatch/16)
 
-        passEncoder.dispatchWorkgroups(dispatchX, dispatchY)
-
-        passEncoder.end()
+        encoder.dispatchWorkgroups(dispatchX, dispatchY)
     }
 
-    private applyConstraints(encoder: GPUCommandEncoder, object: PhysicObject) {
-        const passEncoder = encoder.beginComputePass()
-
-        passEncoder.setPipeline(this.applyConstraintPipeline)
-        passEncoder.setBindGroup(0, object.constraintBindGroup)
-        passEncoder.setBindGroup(1, this.configBindGroup)
+    private applyConstraints(encoder: GPUComputePassEncoder, object: PhysicObject) {
+        encoder.setPipeline(this.applyConstraintPipeline)
+        encoder.setBindGroup(0, object.constraintBindGroup)
+        encoder.setBindGroup(1, this.configBindGroup)
 
         for (let i = 0; i < object.cloth.constraints.colorCount; i++) {
-            passEncoder.setBindGroup(2, object.colorBindGroup, [i*256])
+            encoder.setBindGroup(2, object.colorBindGroup, [i*256])
 
             const dispatch = Math.sqrt(object.cloth.constraints.colors[i*64+1])
             const dispatchX = Math.ceil(dispatch/16)
             const dispatchY = Math.ceil(dispatch/16)
 
-            passEncoder.dispatchWorkgroups(dispatchX, dispatchY)
+            encoder.dispatchWorkgroups(dispatchX, dispatchY)
         }
-
-        passEncoder.end()
     }
 
-    private updatePositions(encoder: GPUCommandEncoder, object: PhysicObject) {
-        const passEncoder = encoder.beginComputePass()
-
-        passEncoder.setPipeline(this.updatePositionPipeline)
-        passEncoder.setBindGroup(0, object.positionBindGroup)
-        passEncoder.setBindGroup(1, this.configBindGroup)
+    private updatePositions(encoder: GPUComputePassEncoder, object: PhysicObject) {
+        encoder.setPipeline(this.updatePositionPipeline)
+        encoder.setBindGroup(0, object.positionBindGroup)
+        encoder.setBindGroup(1, this.configBindGroup)
 
         const dispatch = Math.sqrt(object.cloth.particles.count)
         const dispatchX = Math.ceil(dispatch/16)
         const dispatchY = Math.ceil(dispatch/16)
 
-        passEncoder.dispatchWorkgroups(dispatchX, dispatchY)
-
-        passEncoder.end()
+        encoder.dispatchWorkgroups(dispatchX, dispatchY)
     }
 
-    private updateNormals(encoder: GPUCommandEncoder, object: PhysicObject) {
-        let passEncoder = encoder.beginComputePass()
-
-        passEncoder.setPipeline(this.updateNormalPipeline)
-        passEncoder.setBindGroup(0, object.normalBindGroup)
+    private updateNormals(encoder: GPUComputePassEncoder, object: PhysicObject) {
+        encoder.setPipeline(this.updateNormalPipeline)
+        encoder.setBindGroup(0, object.normalBindGroup)
 
         let dispatch = Math.sqrt(object.cloth.geometry.indexes.length/3)
         let dispatchX = Math.ceil(dispatch/16)
         let dispatchY = Math.ceil(dispatch/16)
 
-        passEncoder.dispatchWorkgroups(dispatchX, dispatchY)
-        passEncoder.end()
+        encoder.dispatchWorkgroups(dispatchX, dispatchY)
     }
 
     public add(cloth: Cloth): void {

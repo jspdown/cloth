@@ -28,8 +28,7 @@ export class Renderer {
         this.depthTextureView = depthTexture.createView()
     }
 
-    // render renders the given geometry using the provided pipeline and bind groups.
-    public render(geometry: Geometry, pipeline: GPURenderPipeline, bindGroups: GPUBindGroup[]): void {
+    public render(encoder: GPUCommandEncoder, geometry: Geometry, pipeline: GPURenderPipeline, bindGroups: GPUBindGroup[]): void {
         const colorTexture = this.context.getCurrentTexture()
         const colorTextureView = colorTexture.createView()
 
@@ -55,8 +54,7 @@ export class Renderer {
             depthStencilAttachment: depthAttachment
         }
 
-        const commandEncoder = this.device.createCommandEncoder()
-        const passEncoder = commandEncoder.beginRenderPass(renderPassDesc)
+        const passEncoder = encoder.beginRenderPass(renderPassDesc)
 
         const { width, height } = this.context.canvas as HTMLCanvasElement
 
@@ -73,7 +71,5 @@ export class Renderer {
 
         passEncoder.drawIndexed(geometry.indexes.length)
         passEncoder.end()
-
-        this.device.queue.submit([commandEncoder.finish()])
     }
 }
