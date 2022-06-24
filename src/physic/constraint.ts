@@ -90,7 +90,8 @@ export class Constraints {
             compliances: new Float32Array(maxConstraints),
             affectedParticles: new Float32Array(maxConstraints * 2),
         }
-        this.colors = new Uint32Array(maxColors * 2)
+
+        this.colors = new Uint32Array(maxColors * 64)
         this.adjacency = []
 
         this.count = 0
@@ -116,7 +117,7 @@ export class Constraints {
         this.colorBuffer = this.device.createBuffer({
             label: "colors",
             size: fourBytesAlignment(this.colors.byteLength),
-            usage: GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST,
+            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
         })
     }
 
@@ -141,7 +142,7 @@ export class Constraints {
         this.device.queue.writeBuffer(
             this.colorBuffer, 0,
             this.colors, 0,
-            2 * this.colorCount)
+            64 * this.colorCount)
     }
 
     public add(p1: Particle, p2: Particle, compliance: number): void {
@@ -238,14 +239,14 @@ export class Constraints {
 
         let currentIdx = 0
         for (let c = 0; c < constraintColors.length; c++) {
-            this.colors[c*2] = currentIdx
+            this.colors[c*64] = currentIdx
 
             for (let i = 0; i < constraintColors[c].length; i++) {
                 coloredConstraints.set(currentIdx, this.get(constraintColors[c][i]))
                 currentIdx++
             }
 
-            this.colors[c*2+1] = currentIdx - this.colors[c*2]
+            this.colors[c*64+1] = currentIdx - this.colors[c*64]
         }
 
         this.data.restValues = coloredConstraints.data.restValues

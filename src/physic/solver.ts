@@ -24,6 +24,7 @@ interface PhysicObject {
     constraintBindGroup: GPUBindGroup
     positionBindGroup: GPUBindGroup
     normalBindGroup: GPUBindGroup
+    colorBindGroup: GPUBindGroup
 }
 
 export class Solver {
@@ -35,8 +36,7 @@ export class Solver {
     private readonly configBuffer: GPUBuffer
     private readonly configBindGroup: GPUBindGroup
 
-    private readonly colorBuffer: GPUBuffer
-    private readonly colorBindGroup: GPUBindGroup
+    private readonly colorBindGroupLayout: GPUBindGroupLayout
 
     private readonly applyConstraintPipeline: GPUComputePipeline
     private readonly semiExplicitEulerPipeline: GPUComputePipeline
@@ -79,22 +79,10 @@ export class Solver {
         })
         this.writeAllBuffer(this.configBuffer, configData)
 
-        this.colorBuffer = this.device.createBuffer({
-            label: "current-color",
-            size: fourBytesAlignment(2 * u32Size),
-            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-        })
-        const colorLayout = device.createBindGroupLayout({
+        this.colorBindGroupLayout = device.createBindGroupLayout({
             label: "current-color",
             entries: [
-                {binding: 0, visibility: GPUShaderStage.COMPUTE, buffer: { type: "uniform" } },
-            ],
-        })
-        this.colorBindGroup = this.device.createBindGroup({
-            label: "current-color",
-            layout: colorLayout,
-            entries: [
-                { binding: 0, resource: { buffer: this.colorBuffer } },
+                {binding: 0, visibility: GPUShaderStage.COMPUTE, buffer: { type: "uniform", hasDynamicOffset: true } },
             ],
         })
 
@@ -141,7 +129,7 @@ export class Solver {
                         ],
                     }),
                     configLayout,
-                    colorLayout,
+                    this.colorBindGroupLayout,
                 ],
             }),
             compute: {
@@ -229,24 +217,23 @@ export class Solver {
     }
 
     private applyConstraints(encoder: GPUCommandEncoder, object: PhysicObject) {
+        const passEncoder = encoder.beginComputePass()
+
+        passEncoder.setPipeline(this.applyConstraintPipeline)
+        passEncoder.setBindGroup(0, object.constraintBindGroup)
+        passEncoder.setBindGroup(1, this.configBindGroup)
+
         for (let i = 0; i < object.cloth.constraints.colorCount; i++) {
-            encoder.copyBufferToBuffer(object.cloth.constraints.colorBuffer, i*2*u32Size, this.colorBuffer, 0, 2*u32Size);
+            passEncoder.setBindGroup(2, object.colorBindGroup, [i*256])
 
-            const passEncoder = encoder.beginComputePass()
-
-            passEncoder.setPipeline(this.applyConstraintPipeline)
-            passEncoder.setBindGroup(0, object.constraintBindGroup)
-            passEncoder.setBindGroup(1, this.configBindGroup)
-            passEncoder.setBindGroup(2, this.colorBindGroup)
-
-            const dispatch = Math.sqrt(object.cloth.constraints.colors[i*2+1])
+            const dispatch = Math.sqrt(object.cloth.constraints.colors[i*64+1])
             const dispatchX = Math.ceil(dispatch/16)
             const dispatchY = Math.ceil(dispatch/16)
 
             passEncoder.dispatchWorkgroups(dispatchX, dispatchY)
-
-            passEncoder.end()
         }
+
+        passEncoder.end()
     }
 
     private updatePositions(encoder: GPUCommandEncoder, object: PhysicObject) {
@@ -318,6 +305,17 @@ export class Solver {
                 { binding: 2, resource: { buffer: cloth.geometry.normalBuffer } },
             ],
         })
+        const colorBindGroup = this.device.createBindGroup({
+            layout: this.colorBindGroupLayout,
+            entries: [{
+                binding: 0,
+                resource: {
+                    buffer: cloth.constraints.colorBuffer,
+                    size: 8,
+                    offset: 0
+                }
+            }],
+        })
 
         this.objects.push({
             cloth,
@@ -326,6 +324,7 @@ export class Solver {
             constraintBindGroup,
             positionBindGroup,
             normalBindGroup,
+            colorBindGroup,
         })
     }
 
