@@ -34,12 +34,12 @@ export class App {
         })
 
         this.renderer = new Renderer(canvas, device)
-        this.solver = new Solver({
+        this.solver = new Solver(this.device, {
             deltaTime: 1/60,
             subSteps: 15,
             relaxation: 1,
             gravity: vec3.create(0, -9.8, 0),
-        }, this.device)
+        })
 
          const geometry = buildPlaneGeometry(this.device, 10, 10, 30, 30)
 
@@ -47,8 +47,6 @@ export class App {
             stretchCompliance: 0,
             bendCompliance: 0.3,
         }, vec3.create(-5, 0, 0))
-
-        this.solver.add(this.cloth)
     }
 
     // run runs the application.
@@ -65,7 +63,7 @@ export class App {
             const encoder = this.device.createCommandEncoder()
 
             if (!this.paused) {
-                await this.solver.solve(encoder)
+                await this.solver.solve(encoder, this.cloth)
             }
 
             const pipeline = this.cloth.getRenderPipeline(this.camera)

@@ -1,3 +1,5 @@
+import { v4 as uuid } from "uuid"
+
 import vertShaderCode from "../shaders/triangle.vert.wgsl"
 import fragShaderCode from "../shaders/triangle.frag.wgsl"
 
@@ -25,6 +27,7 @@ export interface ClothConfig {
 
 // Cloth holds a cloth mesh.
 export class Cloth {
+    public id: string
     public particles: Particles
     public constraints: Constraints
     public uniformBindGroup: GPUBindGroup
@@ -35,7 +38,7 @@ export class Cloth {
     private updated: boolean
 
     private _config: ClothConfig
-    private device: GPUDevice
+    private readonly device: GPUDevice
     private renderPipeline: GPURenderPipeline | null
     private uniformBuffer: GPUBuffer
 
@@ -47,6 +50,7 @@ export class Cloth {
     }
 
     constructor(device: GPUDevice, geometry: Geometry, config: ClothConfig, position?: Vector3, rotation?: Vector3) {
+        this.id = uuid()
         this._config = {
             ...Cloth.defaultConfig,
             ...config
@@ -69,6 +73,9 @@ export class Cloth {
         this._geometry = geometry
         this.particles = buildParticles(this.device, this._geometry, this._config.unit, this._config.density)
         this.constraints = buildConstraints(this.device, this._geometry, this.particles, this._config.stretchCompliance, this._config.bendCompliance)
+
+        this.particles.upload()
+        this.constraints.upload()
 
         logger.info(`vertices: **${this._geometry.vertices.count}**`)
         logger.info(`triangles: **${this._geometry.topology.triangles.length}**`)

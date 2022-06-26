@@ -3,7 +3,7 @@
 @group(0) @binding(2) var<storage, read_write> normals: array<atomic<i32>>;
 
 @stage(compute) @workgroup_size(16, 16)
-fn update_normal(@builtin(num_workgroups) workgroup_size: vec3<u32>, @builtin(global_invocation_id) global_id: vec3<u32>) {
+fn main(@builtin(num_workgroups) workgroup_size: vec3<u32>, @builtin(global_invocation_id) global_id: vec3<u32>) {
     let w = workgroup_size.x * 16u;
     let h = workgroup_size.y * 16u;
 

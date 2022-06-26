@@ -204,7 +204,6 @@ export class Controller {
             || config.cloth.density !== this.config.cloth.density
         const solverConfigChanged = config.solver.subSteps !== this.config.solver.subSteps
 
-
         if (forced || clothGeometryChanged) {
             logger.info("resetting the simulation with a new cloth geometry")
 
@@ -225,8 +224,7 @@ export class Controller {
         }
 
         if (forced || solverConfigChanged || clothGeometryChanged || clothConfigChanged) {
-            this.app.solver = new Solver(config.solver, this.device)
-            this.app.solver.add(this.app.cloth)
+            this.app.solver = new Solver(this.device, config.solver)
         }
     }
 
