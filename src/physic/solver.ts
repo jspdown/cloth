@@ -6,9 +6,9 @@ import updateNormalComputeShaderCode from "./shaders/update_normal.compute.wgsl"
 import * as vec3 from "../math/vector3"
 import {Vector3} from "../math/vector3"
 
-import {Geometry} from "../geometry";
-import {Particles} from "./particle";
-import {Constraints} from "./constraint";
+import {Particles} from "./particles"
+import {Constraints} from "./constraints"
+import {Geometry} from "../geometry"
 
 const semiExplicitEulerLayoutDesc: GPUBindGroupLayoutDescriptor = {
     label: "semi-explicit-euler",
@@ -183,14 +183,14 @@ export class Solver {
         })
     }
 
-    public async solve(encoder: GPUCommandEncoder, object: PhysicObject): Promise<void> {
+    public solve(encoder: GPUCommandEncoder, object: PhysicObject) {
         let state = this.objectStates[object.id]
         if (!state) {
             state = new PhysicObjectState(this.device, object)
             this.objectStates[object.id] = state
         }
 
-        encoder.clearBuffer(object.geometry.normalBuffer)
+        encoder.clearBuffer(object.geometry.vertices.normalBuffer)
 
         const passEncoder = encoder.beginComputePass()
         passEncoder.setBindGroup(1, this.configBindGroup)
@@ -249,7 +249,7 @@ export class Solver {
         encoder.setPipeline(this.updateNormalPipeline)
         encoder.setBindGroup(0, state.updateNormalBindGroup)
 
-        let dispatch = Math.sqrt(object.geometry.indexes.length/3)
+        let dispatch = Math.sqrt(object.geometry.triangles.count)
         let dispatchX = Math.ceil(dispatch/16)
         let dispatchY = Math.ceil(dispatch/16)
 
@@ -265,13 +265,11 @@ class PhysicObjectState {
     public readonly currentColorBindGroup: GPUBindGroup
 
     constructor(device: GPUDevice, object: PhysicObject) {
-        console.log("create physic object state")
-
         this.semiExplicitEulerBindGroup = device.createBindGroup({
             label: "semi-explicit-euler",
             layout: device.createBindGroupLayout(semiExplicitEulerLayoutDesc),
             entries: [
-                { binding: 0, resource: { buffer: object.geometry.positionBuffer } },
+                { binding: 0, resource: { buffer: object.geometry.vertices.positionBuffer } },
                 { binding: 1, resource: { buffer: object.particles.estimatedPositionBuffer } },
                 { binding: 2, resource: { buffer: object.particles.velocityBuffer } },
                 { binding: 3, resource: { buffer: object.particles.inverseMassBuffer } },
@@ -292,7 +290,7 @@ class PhysicObjectState {
             label: "update-position",
             layout: device.createBindGroupLayout(updatePositionLayoutDesc),
             entries: [
-                { binding: 0, resource: { buffer: object.geometry.positionBuffer } },
+                { binding: 0, resource: { buffer: object.geometry.vertices.positionBuffer } },
                 { binding: 1, resource: { buffer: object.particles.estimatedPositionBuffer } },
                 { binding: 2, resource: { buffer: object.particles.velocityBuffer } },
             ],
@@ -301,9 +299,9 @@ class PhysicObjectState {
             label: "update-normal",
             layout: device.createBindGroupLayout(updateNormalLayoutDesc),
             entries: [
-                { binding: 0, resource: { buffer: object.geometry.positionBuffer } },
-                { binding: 1, resource: { buffer: object.geometry.indexBuffer } },
-                { binding: 2, resource: { buffer: object.geometry.normalBuffer } },
+                { binding: 0, resource: { buffer: object.geometry.vertices.positionBuffer } },
+                { binding: 1, resource: { buffer: object.geometry.triangles.indexBuffer } },
+                { binding: 2, resource: { buffer: object.geometry.vertices.normalBuffer } },
             ],
         })
         this.currentColorBindGroup = device.createBindGroup({

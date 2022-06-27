@@ -10,14 +10,9 @@ async function main() {
     }
 
     const adapter = await gpu.requestAdapter()
-
-    let limits = ""
-    for (let key in adapter.limits as any) {
-        limits += ` - ${key}: **${(adapter.limits as any)[key]}**\n`
-    }
-    logger.info(`limits:\n ${limits}`)
-
     const device = await adapter.requestDevice()
+
+    printLimits(adapter.limits)
 
     const canvas = document.getElementById("app") as HTMLCanvasElement
 
@@ -38,3 +33,12 @@ main()
     .then(() => logger.info("done"))
     .catch(err => console.error(err.toString() + "\n" + err.stack))
 
+
+function printLimits(limits: GPUSupportedLimits) {
+    let str = ""
+    for (let key in limits as any) {
+        str += ` - ${key}: **${(limits as any)[key]}**\n`
+    }
+
+    logger.info(`limits:\n ${str}`)
+}

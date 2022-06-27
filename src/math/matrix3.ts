@@ -1,4 +1,4 @@
-import {Vector3} from "./vector3";
+import {Vector3} from "./vector3"
 
 export type Matrix3 = [
     number, number, number,

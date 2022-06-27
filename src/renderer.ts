@@ -1,17 +1,15 @@
-import vertShaderCode from "./shaders/triangle.vert.wgsl"
-import fragShaderCode from "./shaders/triangle.frag.wgsl"
+import vertShaderCode from "./shaders/vert.wgsl"
+import fragShaderCode from "./shaders/frag.wgsl"
 
+import {Camera} from "./camera"
 import {Geometry} from "./geometry"
-import {Camera} from "./camera";
 
 const cameraLayoutDesc: GPUBindGroupLayoutDescriptor = {
-    entries: [
-        {
-            binding: 0,
-            visibility: GPUShaderStage.VERTEX,
-            buffer: { type: "uniform" as const },
-        },
-    ],
+    entries: [{
+        binding: 0,
+        visibility: GPUShaderStage.VERTEX,
+        buffer: { type: "uniform" as const },
+    }],
 }
 
 interface RenderObject {
@@ -89,11 +87,11 @@ export class Renderer {
         passEncoder.setPipeline(state.pipeline)
         passEncoder.setViewport(0, 0, width, height, 0, 1)
         passEncoder.setScissorRect(0, 0, width, height)
-        passEncoder.setVertexBuffer(0, object.geometry.positionBuffer)
-        passEncoder.setVertexBuffer(1, object.geometry.normalBuffer)
-        passEncoder.setIndexBuffer(object.geometry.indexBuffer, "uint32")
+        passEncoder.setVertexBuffer(0, object.geometry.vertices.positionBuffer)
+        passEncoder.setVertexBuffer(1, object.geometry.vertices.normalBuffer)
+        passEncoder.setIndexBuffer(object.geometry.triangles.indexBuffer, "uint32")
         passEncoder.setBindGroup(0, state.cameraBindGroup)
-        passEncoder.drawIndexed(object.geometry.indexes.length)
+        passEncoder.drawIndexed(object.geometry.triangles.count * 3)
         passEncoder.end()
     }
 }

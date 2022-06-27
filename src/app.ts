@@ -2,12 +2,12 @@ import "./main.css"
 
 import * as vec3 from "./math/vector3"
 
-import {Cloth} from "./physic/cloth"
+import {Cloth} from "./cloth"
 import {Camera} from "./camera"
 import {Renderer} from "./renderer"
-import {monitor} from "./monitor";
-import {buildPlaneGeometry} from "./geometry";
-import {Solver} from "./physic/solver";
+import {monitor} from "./monitor"
+import {buildPlaneGeometry} from "./geometry"
+import {Solver} from "./physic/solver"
 
 // App is the application.
 export class App {
@@ -44,6 +44,8 @@ export class App {
          const geometry = buildPlaneGeometry(this.device, 10, 10, 30, 30)
 
         this.cloth = new Cloth(this.device, geometry, {
+            unit: 0.01,
+            density: 0.270,
             stretchCompliance: 0,
             bendCompliance: 0.3,
         })
@@ -60,13 +62,14 @@ export class App {
             await sleep()
             timer.start()
 
+            if (this.cloth.uploadNeeded) {
+                this.cloth.upload()
+            }
+
             const encoder = this.device.createCommandEncoder()
 
-            if (this.cloth.particles.uploadNeeded) this.cloth.particles.upload()
-            if (this.cloth.constraints.uploadNeeded) this.cloth.constraints.upload()
-
             if (!this.paused) {
-                await this.solver.solve(encoder, this.cloth)
+                this.solver.solve(encoder, this.cloth)
             }
 
             this.renderer.render(encoder, this.cloth, this.camera)

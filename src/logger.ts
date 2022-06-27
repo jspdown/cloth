@@ -13,13 +13,17 @@ class Logger {
         this.pending = []
     }
 
-    attach(el: HTMLElement): void {
+    public attach(el: HTMLElement): void {
         this.el = el
 
         setInterval(() => this.flush(), renderInterval)
     }
 
-    flush() {
+    public info(message: string) { this.pending.push({ date: new Date(), message }) }
+    public warn(message: string) { this.pending.push({ date: new Date(), message }) }
+    public error(message: string) { this.pending.push({ date: new Date(), message }) }
+
+    private flush() {
         if (!this.pending.length) return
 
         this.pending.forEach(log => {
@@ -32,8 +36,8 @@ class Logger {
             })
 
             let message = log.message
-            message = this.replaceCarriageReturns(message)
-            message = this.replaceStrongMarkers(message)
+            message = replaceCarriageReturns(message)
+            message = replaceStrongMarkers(message)
 
             p.innerHTML = `<span class="date">${date}&nbsp&nbsp</span><span class="message">${message}</span>`
 
@@ -43,50 +47,9 @@ class Logger {
         this.el.scrollTop = this.el.scrollHeight;
         this.pending = []
     }
-
-    replaceCarriageReturns(str: string): string {
-        return str.replace(/\n/g, "<br/>")
-    }
-
-    replaceStrongMarkers(str: string): string {
-        const marker = "**"
-        let out = ""
-
-        while (true) {
-            const start = str.indexOf(marker)
-            if (start === -1) {
-                return out + str
-            }
-
-            const end = str.slice(start+marker.length).indexOf(marker)
-            if (end === -1) {
-                return out + str
-            }
-
-            out += str.slice(0, start)
-
-            const strong = str.slice(start+marker.length, start+marker.length+end)
-            out += `<span class="strong">${strong}</span>`
-
-            str = str.slice(start+marker.length+end+marker.length)
-        }
-    }
-
-    info(message: string) {
-        this.pending.push({ date: new Date(), message })
-    }
-
-    warn(message: string) {
-        this.pending.push({ date: new Date(), message })
-    }
-
-    error(message: string) {
-        this.pending.push({ date: new Date(), message })
-    }
 }
 
 export const logger = new Logger()
-
 
 export function render(data: any): string {
     const typ = typeof data
@@ -95,4 +58,32 @@ export function render(data: any): string {
     }
 
     return data.toString()
+}
+
+function replaceCarriageReturns(str: string): string {
+    return str.replace(/\n/g, "<br/>")
+}
+
+function replaceStrongMarkers(str: string): string {
+    const marker = "**"
+    let out = ""
+
+    while (true) {
+        const start = str.indexOf(marker)
+        if (start === -1) {
+            return out + str
+        }
+
+        const end = str.slice(start+marker.length).indexOf(marker)
+        if (end === -1) {
+            return out + str
+        }
+
+        out += str.slice(0, start)
+
+        const strong = str.slice(start+marker.length, start+marker.length+end)
+        out += `<span class="strong">${strong}</span>`
+
+        str = str.slice(start+marker.length+end+marker.length)
+    }
 }

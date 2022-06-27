@@ -1,13 +1,12 @@
-import {Solver, SolverConfig} from "./physic/solver"
-import {buildPlaneGeometry} from "./geometry"
 import {logger} from "./logger"
+import {buildPlaneGeometry} from "./geometry"
+import {Solver, SolverConfig} from "./physic/solver"
 import {App} from "./app"
+import {Cloth} from "./cloth"
 
 interface Config {
     paused: boolean
-
     solver: SolverConfig
-
     cloth: ClothConfig
 }
 
@@ -204,23 +203,21 @@ export class Controller {
             || config.cloth.density !== this.config.cloth.density
         const solverConfigChanged = config.solver.subSteps !== this.config.solver.subSteps
 
-        if (forced || clothGeometryChanged) {
+        if (forced || clothGeometryChanged || clothConfigChanged) {
             logger.info("resetting the simulation with a new cloth geometry")
 
-            this.app.cloth.geometry = buildPlaneGeometry(this.device,
+            const geometry = buildPlaneGeometry(this.device,
                 config.cloth.width,
                 config.cloth.height,
                 config.cloth.widthDivisions,
                 config.cloth.heightDivisions)
-        }
 
-        if (forced || clothConfigChanged) {
-            this.app.cloth.config = {
+            this.app.cloth = new Cloth(this.device, geometry, {
                 unit: config.cloth.unit,
                 density: config.cloth.density,
                 stretchCompliance: config.cloth.stretchCompliance,
                 bendCompliance: config.cloth.bendCompliance,
-            }
+            })
         }
 
         if (forced || solverConfigChanged || clothGeometryChanged || clothConfigChanged) {
@@ -264,16 +261,24 @@ export class Controller {
     }
 
     private restartSimulation(): void {
-        this.app.cloth.geometry = buildPlaneGeometry(this.device,
+        const geometry = buildPlaneGeometry(this.device,
             this.config.cloth.width,
             this.config.cloth.height,
             this.config.cloth.widthDivisions,
             this.config.cloth.heightDivisions)
+
+        this.app.cloth = new Cloth(this.device, geometry, {
+            unit: this.config.cloth.unit,
+            density: this.config.cloth.density,
+            stretchCompliance: this.config.cloth.stretchCompliance,
+            bendCompliance: this.config.cloth.bendCompliance,
+        })
     }
 
     private togglePlay(): void {
         this.config.paused = !this.config.paused
         this.app.paused = this.config.paused
+
         this.renderNeeded = true
     }
 }

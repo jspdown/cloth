@@ -13,7 +13,7 @@ export interface Config {
     distance?: number
 }
 
-const float32DataSize = 4
+const f32Size = 4
 
 // Camera is a 3D perspective camera with orbit control.
 export class Camera {
@@ -54,7 +54,7 @@ export class Camera {
         this.limitX = 85.0
 
         this.buffer = device.createBuffer({
-            size: 2 * float32DataSize * 4 * 4,
+            size: 2 * f32Size * 4 * 4,
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
         })
 

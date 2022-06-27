@@ -1,6 +1,6 @@
 import * as vec3 from "../math/vector3"
 
-import {Particle} from "./particle"
+import {Particle} from "./particles"
 
 interface ConstraintIterator { (constraint: ConstraintRef): void }
 
@@ -73,24 +73,25 @@ export class Constraints {
     public colorCount: number
     public colors: Uint32Array
 
+    private readonly data: ConstraintsData
+    private readonly max: number
+
     public readonly restValueBuffer: GPUBuffer
     public readonly complianceBuffer: GPUBuffer
     public readonly affectedParticleBuffer: GPUBuffer
     public readonly colorBuffer: GPUBuffer
 
     private readonly device: GPUDevice
-    private readonly data: ConstraintsData
 
     private readonly adjacency: number[][]
-    private readonly maxConstraints: number
 
-    constructor(device: GPUDevice, maxConstraints: number) {
+    constructor(device: GPUDevice, max: number) {
         this.device = device
         this.data = {
             uploadNeeded: true,
-            restValues: new Float32Array(maxConstraints),
-            compliances: new Float32Array(maxConstraints),
-            affectedParticles: new Float32Array(maxConstraints * 2),
+            restValues: new Float32Array(max),
+            compliances: new Float32Array(max),
+            affectedParticles: new Float32Array(max * 2),
         }
 
         this.colors = new Uint32Array(maxColors * 64)
@@ -99,7 +100,7 @@ export class Constraints {
         this.count = 0
         this.colorCount = 0
 
-        this.maxConstraints = maxConstraints
+        this.max = max
 
         this.restValueBuffer = this.device.createBuffer({
             label: "rest-values",
@@ -154,7 +155,7 @@ export class Constraints {
     }
 
     public add(p1: Particle, p2: Particle, compliance: number): void {
-        if (this.count >= this.maxConstraints) {
+        if (this.count >= this.max) {
             throw new Error("max number of constraints reached")
         }
 
@@ -242,7 +243,7 @@ export class Constraints {
 
         // TODO: rewrite this part and avoid the unnecessary copy.
         // Rearrange constraints by color.
-        const coloredConstraints = new Constraints(this.device, this.maxConstraints)
+        const coloredConstraints = new Constraints(this.device, this.max)
         coloredConstraints.count = this.count
 
         let currentIdx = 0

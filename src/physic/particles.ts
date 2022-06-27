@@ -31,7 +31,7 @@ export class Vector3Ref {
     get z(): number { return this.buffer[this.offset+2] }
     set z(z: number) { this.buffer[this.offset+2] = z }
 
-    public toString = (): string => {
+    public toString(): string {
         return `(${this.x}, ${this.y}, ${this.z})`
     }
 }
@@ -104,13 +104,13 @@ export class Particles {
     public count: number
 
     private readonly data: ParticlesData
+    private readonly max: number
 
     public readonly estimatedPositionBuffer: GPUBuffer
     public readonly velocityBuffer: GPUBuffer
     public readonly inverseMassBuffer: GPUBuffer
 
     private readonly device: GPUDevice
-    private readonly max: number
 
     constructor(device: GPUDevice, maxParticles: number) {
         this.device = device
