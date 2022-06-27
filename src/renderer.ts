@@ -1,8 +1,9 @@
 import vertShaderCode from "./shaders/triangle.vert.wgsl"
 import fragShaderCode from "./shaders/triangle.frag.wgsl"
 
-import {Geometry} from "./geometry"
 import {Camera} from "./camera";
+import {Vertices} from "./vertex";
+import {Triangles} from "./triangles";
 
 const cameraLayoutDesc: GPUBindGroupLayoutDescriptor = {
     entries: [
@@ -17,7 +18,8 @@ const cameraLayoutDesc: GPUBindGroupLayoutDescriptor = {
 interface RenderObject {
     id: string
 
-    geometry: Geometry
+    triangles: Triangles
+    vertices: Vertices
 }
 
 // Renderer is a basic 3D renderer.
@@ -89,11 +91,11 @@ export class Renderer {
         passEncoder.setPipeline(state.pipeline)
         passEncoder.setViewport(0, 0, width, height, 0, 1)
         passEncoder.setScissorRect(0, 0, width, height)
-        passEncoder.setVertexBuffer(0, object.geometry.positionBuffer)
-        passEncoder.setVertexBuffer(1, object.geometry.normalBuffer)
-        passEncoder.setIndexBuffer(object.geometry.indexBuffer, "uint32")
+        passEncoder.setVertexBuffer(0, object.vertices.positionBuffer)
+        passEncoder.setVertexBuffer(1, object.vertices.normalBuffer)
+        passEncoder.setIndexBuffer(object.triangles.indexBuffer, "uint32")
         passEncoder.setBindGroup(0, state.cameraBindGroup)
-        passEncoder.drawIndexed(object.geometry.indexes.length)
+        passEncoder.drawIndexed(object.triangles.count * 3)
         passEncoder.end()
     }
 }

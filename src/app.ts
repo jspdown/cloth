@@ -60,10 +60,11 @@ export class App {
             await sleep()
             timer.start()
 
-            const encoder = this.device.createCommandEncoder()
+            if (this.cloth.uploadNeeded) {
+                this.cloth.upload()
+            }
 
-            if (this.cloth.particles.uploadNeeded) this.cloth.particles.upload()
-            if (this.cloth.constraints.uploadNeeded) this.cloth.constraints.upload()
+            const encoder = this.device.createCommandEncoder()
 
             if (!this.paused) {
                 await this.solver.solve(encoder, this.cloth)

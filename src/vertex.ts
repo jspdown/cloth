@@ -36,58 +36,103 @@ export class Vector3Ref {
 export class VertexRef {
     public readonly id: number
 
-    private readonly vertices: Vertices
+    private readonly data: VerticesData
     private readonly offset: number
 
     static normalFactor: 10000
 
-    constructor(id: number, vertices: Vertices, offset: number) {
+    constructor(id: number, data: VerticesData, offset: number) {
         this.id = id
-        this.vertices = vertices
+        this.data = data
         this.offset = offset
     }
 
     get position(): Vector3 {
-        return new Vector3Ref(this.vertices.positions, this.offset*Vector3Ref.alignedLength)
+        return new Vector3Ref(this.data.positions, this.offset*Vector3Ref.alignedLength)
     }
     set position(position: Vector3) {
-        this.vertices.positions[this.offset*Vector3Ref.alignedLength] = position.x
-        this.vertices.positions[this.offset*Vector3Ref.alignedLength+1] = position.y
-        this.vertices.positions[this.offset*Vector3Ref.alignedLength+2] = position.z
+        this.data.positions[this.offset*Vector3Ref.alignedLength] = position.x
+        this.data.positions[this.offset*Vector3Ref.alignedLength+1] = position.y
+        this.data.positions[this.offset*Vector3Ref.alignedLength+2] = position.z
+
+        this.data.uploadNeeded = true
     }
 
     get normal(): Vector3 {
-        return new Vector3Ref(this.vertices.normals, this.offset*Vector3Ref.alignedLength)
+        return new Vector3Ref(this.data.normals, this.offset*Vector3Ref.alignedLength)
     }
     set normal(normal: Vector3) {
-        this.vertices.normals[this.offset*Vector3Ref.alignedLength] = normal.x
-        this.vertices.normals[this.offset*Vector3Ref.alignedLength+1] = normal.y
-        this.vertices.normals[this.offset*Vector3Ref.alignedLength+2] = normal.z
+        this.data.normals[this.offset*Vector3Ref.alignedLength] = normal.x
+        this.data.normals[this.offset*Vector3Ref.alignedLength+1] = normal.y
+        this.data.normals[this.offset*Vector3Ref.alignedLength+2] = normal.z
+
+        this.data.uploadNeeded = true
     }
+}
+
+interface VerticesData {
+    uploadNeeded: boolean
+
+    positions: Float32Array
+    normals: Int32Array
 }
 
 export class Vertices {
     public count: number
 
-    public readonly positions: Float32Array
-    public readonly normals: Int32Array
+    public readonly positionBuffer: GPUBuffer
+    public readonly normalBuffer: GPUBuffer
 
-    public readonly max: number
+    private readonly data: VerticesData
+    private readonly max: number
 
-    constructor(maxVertices: number) {
-        this.positions = new Float32Array(maxVertices * Vector3Ref.alignedLength)
-        this.normals = new Int32Array(maxVertices * Vector3Ref.alignedLength)
+    private readonly device: GPUDevice
+
+    constructor(device: GPUDevice, maxVertices: number) {
+        this.device = device
+        this.data = {
+            uploadNeeded: true,
+            positions: new Float32Array(maxVertices * Vector3Ref.alignedLength),
+            normals: new Int32Array(maxVertices * Vector3Ref.alignedLength),
+        }
+
+        this.positionBuffer = device.createBuffer({
+            size: fourBytesAlignment(this.data.positions.byteLength),
+            usage: GPUBufferUsage.VERTEX | GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+        })
+        this.normalBuffer = device.createBuffer({
+            size: fourBytesAlignment(this.data.normals.byteLength),
+            usage: GPUBufferUsage.VERTEX | GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+        })
 
         this.count = 0
         this.max = maxVertices
     }
 
-    add(vertex: Vertex) {
-        if (this.count+1 > this.max) {
+    public get uploadNeeded(): boolean {
+        return this.data.uploadNeeded
+    }
+
+    public upload(): void {
+        this.device.queue.writeBuffer(
+            this.positionBuffer, 0,
+            this.data.positions, 0,
+            this.count)
+
+        this.device.queue.writeBuffer(
+            this.normalBuffer, 0,
+            this.data.normals, 0,
+            this.count)
+
+        this.data.uploadNeeded = false
+    }
+
+    public add(vertex: Vertex) {
+        if (this.count >= this.max) {
             return new Error("max number of vertices reached")
         }
 
-        const v = new VertexRef(this.count, this, this.count)
+        const v = new VertexRef(this.count, this.data, this.count)
 
         v.position = vertex.position
         v.normal = vertex.normal
@@ -95,13 +140,17 @@ export class Vertices {
         this.count++
     }
 
-    get(i: number): Vertex {
-        return new VertexRef(i, this, i)
+    public get(i: number): Vertex {
+        return new VertexRef(i, this.data, i)
     }
 
-    forEach(cb: VertexIterator): void {
+    public forEach(cb: VertexIterator): void {
         for (let i = 0; i < this.count; i++) {
-            cb(new VertexRef(i, this, i))
+            cb(new VertexRef(i, this.data, i))
         }
     }
+}
+
+function fourBytesAlignment(size: number): number {
+    return (size + 3) & ~3
 }

@@ -1,13 +1,13 @@
 import { v4 as uuid } from "uuid"
 
 import * as vec3 from "../math/vector3"
-import {Vector3} from "../math/vector3"
 
-import {Geometry} from "../geometry"
-import {Vertex} from "../vertex"
+import {Vertex, Vertices} from "../vertex"
 import {Particle, Particles} from "./particle"
 import {Constraints} from "./constraint"
 import {logger, render} from "../logger"
+import {TriangleRef, Triangles} from "../triangles";
+import {Geometry} from "../geometry";
 
 interface Indexable {
     [key: string]: any;
@@ -23,10 +23,11 @@ export interface ClothConfig {
 // Cloth holds a cloth mesh.
 export class Cloth {
     public id: string
+    public triangles: Triangles
+    public vertices: Vertices
     public particles: Particles
     public constraints: Constraints
 
-    private _geometry: Geometry
     private _config: ClothConfig
     private readonly device: GPUDevice
 
@@ -48,18 +49,28 @@ export class Cloth {
         this.geometry = geometry
     }
 
-    public set geometry(geometry: Geometry) {
-        this._geometry = geometry
-        this.particles = buildParticles(this.device, this._geometry, this._config.unit, this._config.density)
-        this.constraints = buildConstraints(this.device, this._geometry, this.particles, this._config.stretchCompliance, this._config.bendCompliance)
-
-        logger.info(`vertices: **${this._geometry.vertices.count}**`)
-        logger.info(`triangles: **${this._geometry.topology.triangles.length}**`)
-        logger.info(`edges: **${this._geometry.topology.edges.length}**`)
-        logger.info(`constraints: **${this.constraints.count}**`)
+    public get uploadNeeded(): boolean {
+        return this.vertices.uploadNeeded
+            || this.triangles.uploadNeeded
+            || this.particles.uploadNeeded
+            || this.constraints.uploadNeeded
     }
-    public get geometry(): Geometry {
-        return this._geometry
+    public upload(): void {
+        if (this.vertices.uploadNeeded) this.vertices.upload()
+        if (this.triangles.uploadNeeded) this.triangles.upload()
+        if (this.particles.uploadNeeded) this.particles.upload()
+        if (this.constraints.uploadNeeded) this.constraints.upload()
+    }
+
+    public set geometry(geometry: Geometry) {
+        this.triangles = geometry.triangles
+        this.vertices = geometry.vertices
+        this.particles = buildParticles(this.device, this.vertices, this.triangles, this._config.unit, this._config.density)
+        this.constraints = buildConstraints(this.device, this.vertices, this.triangles, this.particles, this._config.stretchCompliance, this._config.bendCompliance)
+
+        logger.info(`vertices: **${this.vertices.count}**`)
+        logger.info(`triangles: **${this.triangles.count}**`)
+        logger.info(`constraints: **${this.constraints.count}**`)
     }
 
     public set config(config: ClothConfig) {
@@ -86,10 +97,10 @@ export class Cloth {
         })
 
         if (particlesNeedsUpdate) {
-            this.particles = buildParticles(this.device, this._geometry, cfg.unit, cfg.density)
+            this.particles = buildParticles(this.device, this.vertices, this.triangles, cfg.unit, cfg.density)
         }
         if (constraintsNeedsUpdate) {
-            this.constraints = buildConstraints(this.device, this._geometry, this.particles, cfg.stretchCompliance, cfg.bendCompliance)
+            this.constraints = buildConstraints(this.device, this.vertices, this.triangles, this.particles, cfg.stretchCompliance, cfg.bendCompliance)
         }
 
         this._config = cfg
@@ -99,20 +110,18 @@ export class Cloth {
     }
 }
 
-function buildParticles(device: GPUDevice, geometry: Geometry, unit: number, density: number): Particles {
-    const particles = new Particles(device, geometry.vertices.count)
+function buildParticles(device: GPUDevice, vertices: Vertices, triangles: Triangles, unit: number, density: number): Particles {
+    const particles = new Particles(device, vertices.count)
 
-    geometry.vertices.forEach((vertex: Vertex) => {
-        particles.add({
+    vertices.forEach((vertex: Vertex) => particles.add({
             position: vertex.position,
             velocity: vec3.zero(),
             estimatedPosition: vec3.zero(),
             inverseMass: 0.0,
-        })
-    })
+    }))
 
     // Compute particles mass.
-    for (let triangle of geometry.topology.triangles) {
+    triangles.forEach((triangle: TriangleRef) => {
         const pa = particles.get(triangle.a)
         const pb = particles.get(triangle.b)
         const pc = particles.get(triangle.c)
@@ -126,7 +135,7 @@ function buildParticles(device: GPUDevice, geometry: Geometry, unit: number, den
         pa.inverseMass += edgeInverseMass
         pb.inverseMass += edgeInverseMass
         pc.inverseMass += edgeInverseMass
-    }
+    })
 
     particles.forEach((particle: Particle): void => {
         if (particle.position.z === 0) {
@@ -143,11 +152,12 @@ interface constraint {
     p2: number
 }
 
-function buildConstraints(device: GPUDevice, geometry: Geometry, particles: Particles, stretchCompliance: number, bendCompliance: number): Constraints {
+function buildConstraints(device: GPUDevice, vertices: Vertices, triangles: Triangles, particles: Particles, stretchCompliance: number, bendCompliance: number): Constraints {
+    const edges = buildEdges(vertices, triangles)
     const constraintParticles: constraint[] = []
 
     // Generate stretching constraints.
-    for (let edge of geometry.topology.edges) {
+    for (let edge of edges) {
         constraintParticles.push({
             compliance: stretchCompliance,
             p1: edge.start,
@@ -156,7 +166,7 @@ function buildConstraints(device: GPUDevice, geometry: Geometry, particles: Part
     }
 
     // Generate bending constraints.
-    for (let edge of geometry.topology.edges) {
+    for (let edge of edges) {
         if (edge.triangles.length == 1) {
             continue
         }
@@ -164,8 +174,8 @@ function buildConstraints(device: GPUDevice, geometry: Geometry, particles: Part
             throw new Error(`Non-manifold mesh: ${edge.start}-${edge.end} shared with ${edge.triangles.length} triangles`)
         }
 
-        const t1 = geometry.topology.triangles[edge.triangles[0]]
-        const t2 = geometry.topology.triangles[edge.triangles[1]]
+        const t1 = triangles.get(edge.triangles[0])
+        const t2 = triangles.get(edge.triangles[1])
 
         let p1: number
         if (t1.a != edge.start && t1.a != edge.end) {
@@ -200,6 +210,57 @@ function buildConstraints(device: GPUDevice, geometry: Geometry, particles: Part
     }
 
     return constraints
+}
+
+interface Edge {
+    start: number
+    end: number
+    triangles: number[]
+}
+
+function buildEdges(vertices: Vertices, triangles: Triangles): Edge[] {
+    const vertexTriangles = new Array(vertices.count)
+    const existingEdges: Record<string, number> = {}
+
+    const edges: Edge[] = []
+
+    const addTriangleToVertex = (id: number, i: number) => {
+        if (!vertexTriangles[id]) {
+            vertexTriangles[id] = []
+        }
+
+        vertexTriangles[id].push(i)
+    }
+
+    triangles.forEach((triangle: TriangleRef): void => {
+        addTriangleToVertex(triangle.a, triangle.id)
+        addTriangleToVertex(triangle.b, triangle.id)
+        addTriangleToVertex(triangle.c, triangle.id)
+
+        const triangleEdges = [
+            { start: Math.min(triangle.a, triangle.b), end: Math.max(triangle.a, triangle.b) },
+            { start: Math.min(triangle.b, triangle.c), end: Math.max(triangle.b, triangle.c) },
+            { start: Math.min(triangle.c, triangle.a), end: Math.max(triangle.c, triangle.a) },
+        ]
+
+        for (let edge of triangleEdges) {
+            const key = `${edge.start}-${edge.end}`
+
+            if (!existingEdges[key]) {
+                edges.push({
+                    start: edge.start,
+                    end: edge.end,
+                    triangles: [triangle.id],
+                })
+                existingEdges[key] = edges.length - 1
+                continue
+            }
+
+            edges[existingEdges[key]].triangles.push(triangle.id)
+        }
+    })
+
+    return edges
 }
 
 function shuffle<T>(arr: Array<T>): void {
