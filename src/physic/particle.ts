@@ -4,12 +4,11 @@ interface ParticleIterator { (particle: ParticleRef): void }
 
 export interface Particle {
     id?: number
+
     position: Vector3
     estimatedPosition: Vector3
-    deltaPosition: Vector3
     velocity: Vector3
     inverseMass: number
-    constraintCount: number
 }
 
 export class Vector3Ref {
@@ -56,6 +55,8 @@ export class ParticleRef {
         this.data.positions[this.offset*Vector3Ref.alignedLength] = position.x
         this.data.positions[this.offset*Vector3Ref.alignedLength+1] = position.y
         this.data.positions[this.offset*Vector3Ref.alignedLength+2] = position.z
+
+        this.data.uploadNeeded = true
     }
 
     get estimatedPosition(): Vector3 {
@@ -65,15 +66,8 @@ export class ParticleRef {
         this.data.estimatedPositions[this.offset*Vector3Ref.alignedLength] = estimatedPosition.x
         this.data.estimatedPositions[this.offset*Vector3Ref.alignedLength+1] = estimatedPosition.y
         this.data.estimatedPositions[this.offset*Vector3Ref.alignedLength+2] = estimatedPosition.z
-    }
 
-    get deltaPosition(): Vector3 {
-        return new Vector3Ref(this.data.deltaPositions, this.offset*Vector3Ref.alignedLength)
-    }
-    set deltaPosition(deltaPosition: Vector3) {
-        this.data.deltaPositions[this.offset*Vector3Ref.alignedLength] = deltaPosition.x
-        this.data.deltaPositions[this.offset*Vector3Ref.alignedLength+1] = deltaPosition.y
-        this.data.deltaPositions[this.offset*Vector3Ref.alignedLength+2] = deltaPosition.z
+        this.data.uploadNeeded = true
     }
 
     get velocity(): Vector3 {
@@ -83,6 +77,8 @@ export class ParticleRef {
         this.data.velocities[this.offset*Vector3Ref.alignedLength] = velocity.x
         this.data.velocities[this.offset*Vector3Ref.alignedLength+1] = velocity.y
         this.data.velocities[this.offset*Vector3Ref.alignedLength+2] = velocity.z
+
+        this.data.uploadNeeded = true
     }
 
     get inverseMass(): number {
@@ -90,23 +86,18 @@ export class ParticleRef {
     }
     set inverseMass(inverseMass: number) {
         this.data.inverseMasses[this.offset] = inverseMass
-    }
 
-    get constraintCount(): number {
-        return this.data.constraintCounts[this.offset]
-    }
-    set constraintCount(constraintCount: number) {
-        this.data.constraintCounts[this.offset] = constraintCount
+        this.data.uploadNeeded = true
     }
 }
 
 interface ParticlesData {
+    uploadNeeded: boolean
+
     positions: Float32Array
-    velocities: Float32Array
     estimatedPositions: Float32Array
-    deltaPositions: Float32Array
+    velocities: Float32Array
     inverseMasses: Float32Array
-    constraintCounts: Float32Array
 }
 
 export class Particles {
@@ -124,12 +115,11 @@ export class Particles {
     constructor(device: GPUDevice, maxParticles: number) {
         this.device = device
         this.data = {
+            uploadNeeded: true,
             positions: new Float32Array(maxParticles * Vector3Ref.alignedLength),
             velocities: new Float32Array(maxParticles * Vector3Ref.alignedLength),
             estimatedPositions: new Float32Array(maxParticles * Vector3Ref.alignedLength),
-            deltaPositions: new Float32Array(maxParticles * Vector3Ref.alignedLength),
             inverseMasses: new Float32Array(maxParticles),
-            constraintCounts: new Float32Array(maxParticles),
         }
 
         this.estimatedPositionBuffer = this.device.createBuffer({
@@ -152,6 +142,10 @@ export class Particles {
         this.max = maxParticles
     }
 
+    public get uploadNeeded(): boolean {
+        return this.data.uploadNeeded
+    }
+
     public upload(): void {
         this.device.queue.writeBuffer(
             this.estimatedPositionBuffer, 0,
@@ -167,6 +161,8 @@ export class Particles {
             this.inverseMassBuffer, 0,
             this.data.inverseMasses, 0,
             this.count)
+
+        this.data.uploadNeeded = false
     }
 
     public add(particle: Particle): void {
@@ -178,7 +174,6 @@ export class Particles {
 
         p.position = particle.position
         p.estimatedPosition = particle.estimatedPosition
-        p.deltaPosition = particle.deltaPosition
         p.velocity = particle.velocity
         p.inverseMass = particle.inverseMass
 

@@ -17,11 +17,10 @@ const float32DataSize = 4
 
 // Camera is a 3D perspective camera with orbit control.
 export class Camera {
-    // Uniform.
-    public uniformBindGroup: GPUBindGroup
-    public uniformBindGroupLayout: GPUBindGroupLayout
+    public buffer: GPUBuffer
 
     private readonly config: Config
+    private readonly device: GPUDevice
 
     // Camera movement state.
     private zoom: number
@@ -34,10 +33,7 @@ export class Camera {
     private lastY: number
     private readonly limitX: number
 
-    private readonly device: GPUDevice
-    private readonly uniformBuffer: GPUBuffer
-
-    constructor(canvas: HTMLCanvasElement, device: GPUDevice, config?: Config) {
+    constructor(device: GPUDevice, canvas: HTMLCanvasElement, config?: Config) {
         this.device = device
         this.config = { ...{
             fovy: Math.PI / 4,
@@ -57,33 +53,9 @@ export class Camera {
         this.lastY = 0.0
         this.limitX = 85.0
 
-        this.uniformBuffer = device.createBuffer({
+        this.buffer = device.createBuffer({
             size: 2 * float32DataSize * 4 * 4,
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-        })
-
-        this.uniformBindGroupLayout = device.createBindGroupLayout({
-            entries: [
-                {
-                    binding: 0,
-                    visibility: GPUShaderStage.VERTEX,
-                    buffer: {
-                        type: "uniform" as const,
-                    },
-                },
-            ],
-        })
-
-        this.uniformBindGroup = device.createBindGroup({
-            layout: this.uniformBindGroupLayout,
-            entries: [
-                {
-                    binding: 0,
-                    resource: {
-                        buffer: this.uniformBuffer,
-                    },
-                },
-            ],
         })
 
         canvas.addEventListener("mousedown", () => this.onMouseButtonPressed())
@@ -168,6 +140,6 @@ export class Camera {
         data.set(projection, 0)
         data.set(view, 4 * 4)
 
-        this.device.queue.writeBuffer(this.uniformBuffer, 0, data, 0, data.length)
+        this.device.queue.writeBuffer(this.buffer, 0, data, 0, data.length)
     }
 }

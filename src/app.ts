@@ -28,12 +28,12 @@ export class App {
         this.paused = true
         this.stopped = false
 
-        this.camera = new Camera(canvas, device, {
+        this.camera = new Camera(device, canvas, {
             width: canvas.width,
             height: canvas.height,
         })
 
-        this.renderer = new Renderer(canvas, device)
+        this.renderer = new Renderer(device, canvas)
         this.solver = new Solver(this.device, {
             deltaTime: 1/60,
             subSteps: 15,
@@ -46,7 +46,7 @@ export class App {
         this.cloth = new Cloth(this.device, geometry, {
             stretchCompliance: 0,
             bendCompliance: 0.3,
-        }, vec3.create(-5, 0, 0))
+        })
     }
 
     // run runs the application.
@@ -62,18 +62,14 @@ export class App {
 
             const encoder = this.device.createCommandEncoder()
 
+            if (this.cloth.particles.uploadNeeded) this.cloth.particles.upload()
+            if (this.cloth.constraints.uploadNeeded) this.cloth.constraints.upload()
+
             if (!this.paused) {
                 await this.solver.solve(encoder, this.cloth)
             }
 
-            const pipeline = this.cloth.getRenderPipeline(this.camera)
-
-            if (pipeline) {
-                this.renderer.render(encoder, this.cloth.geometry, pipeline, [
-                    this.camera.uniformBindGroup,
-                    this.cloth.uniformBindGroup,
-                ])
-            }
+            this.renderer.render(encoder, this.cloth, this.camera)
 
             this.device.queue.submit([encoder.finish()])
             await this.device.queue.onSubmittedWorkDone()

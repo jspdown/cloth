@@ -265,6 +265,8 @@ class PhysicObjectState {
     public readonly currentColorBindGroup: GPUBindGroup
 
     constructor(device: GPUDevice, object: PhysicObject) {
+        console.log("create physic object state")
+
         this.semiExplicitEulerBindGroup = device.createBindGroup({
             label: "semi-explicit-euler",
             layout: device.createBindGroupLayout(semiExplicitEulerLayoutDesc),

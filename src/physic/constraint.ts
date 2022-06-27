@@ -27,6 +27,8 @@ export class ConstraintRef implements Constraint {
     }
     public set p1(p1: number) {
         this.data.affectedParticles[this.offset*2] = p1
+
+        this.data.uploadNeeded = true
     }
 
     public get p2(): number {
@@ -34,6 +36,8 @@ export class ConstraintRef implements Constraint {
     }
     public set p2(p2: number) {
         this.data.affectedParticles[this.offset*2+1] = p2
+
+        this.data.uploadNeeded = true
     }
 
     public get restValue(): number {
@@ -41,6 +45,8 @@ export class ConstraintRef implements Constraint {
     }
     public set restValue(restValue: number) {
         this.data.restValues[this.offset] = restValue
+
+        this.data.uploadNeeded = true
     }
 
     public get compliance(): number {
@@ -48,19 +54,14 @@ export class ConstraintRef implements Constraint {
     }
     public set compliance(compliance: number) {
         this.data.compliances[this.offset] = compliance
-    }
 
-    public unref(): Constraint {
-        return {
-            p1: this.p1,
-            p2: this.p2,
-            compliance: this.compliance,
-            restValue: this.restValue
-        }
+        this.data.uploadNeeded = true
     }
 }
 
 interface ConstraintsData {
+    uploadNeeded: boolean
+
     restValues: Float32Array
     compliances: Float32Array
     affectedParticles: Float32Array
@@ -86,6 +87,7 @@ export class Constraints {
     constructor(device: GPUDevice, maxConstraints: number) {
         this.device = device
         this.data = {
+            uploadNeeded: true,
             restValues: new Float32Array(maxConstraints),
             compliances: new Float32Array(maxConstraints),
             affectedParticles: new Float32Array(maxConstraints * 2),
@@ -121,6 +123,10 @@ export class Constraints {
         })
     }
 
+    public get uploadNeeded(): boolean {
+        return this.data.uploadNeeded
+    }
+
     public upload(): void {
         this.color()
 
@@ -143,6 +149,8 @@ export class Constraints {
             this.colorBuffer, 0,
             this.colors, 0,
             64 * this.colorCount)
+
+        this.data.uploadNeeded = false
     }
 
     public add(p1: Particle, p2: Particle, compliance: number): void {
