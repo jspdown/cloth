@@ -57,6 +57,15 @@ export class ConstraintRef implements Constraint {
 
         this.data.uploadNeeded = true
     }
+
+    public unref(): Constraint {
+        return {
+            p1: this.p1,
+            p2: this.p2,
+            restValue: this.restValue,
+            compliance: this.compliance,
+        }
+    }
 }
 
 interface ConstraintsData {
@@ -208,20 +217,24 @@ export class Constraints {
     // Color constraints in such a way that constraints from a group are not
     // sharing a single particle.
     private color(): void {
-        const constraintColors = []
+        this.colorCount = 0
 
+        const indexes: number[] = []
         const markedConstraints = new Array<boolean>(this.count).fill(false)
         const markedParticles = new Array<boolean>(this.adjacency.length).fill(false)
-        let remainingUnmarkedConstraints =  this.count
 
+        let remainingUnmarkedConstraints = this.count
+
+        // Assign a color to each constraint and store the index of the constraint
+        // ordered by color.
         while (remainingUnmarkedConstraints) {
-            if (constraintColors.length >= maxColors) {
+            if (this.colorCount >= maxColors) {
                 throw new Error("max number of colors reached")
             }
 
-            const color = []
             markedParticles.fill(false)
 
+            const colorStart = indexes.length
             for (let i = 0; i < this.count; i++) {
                 if (markedConstraints[i]) continue
 
@@ -230,39 +243,40 @@ export class Constraints {
 
                 if (markedParticles[p1] || markedParticles[p2]) continue
 
-                color.push(i)
-                markedConstraints[i] = true
-                remainingUnmarkedConstraints--
+                indexes.push(i)
 
+                markedConstraints[i] = true
                 markedParticles[p1] = true
                 markedParticles[p2] = true
+
+                remainingUnmarkedConstraints--
             }
 
-            constraintColors.push(color)
+            this.colors[this.colorCount*64] = colorStart
+            this.colors[this.colorCount*64+1] = indexes.length - colorStart
+
+            this.colorCount++
         }
 
-        // TODO: rewrite this part and avoid the unnecessary copy.
-        // Rearrange constraints by color.
-        const coloredConstraints = new Constraints(this.device, this.max)
-        coloredConstraints.count = this.count
+        // Re-order constraints following the color indices.
+        for (let i = 0; i < this.count; i++) {
+            if (indexes[i] === i) continue
 
-        let currentIdx = 0
-        for (let c = 0; c < constraintColors.length; c++) {
-            this.colors[c*64] = currentIdx
+            const originalValue = this.get(i).unref()
+            let j = i
+            let k = indexes[j]
 
-            for (let i = 0; i < constraintColors[c].length; i++) {
-                coloredConstraints.set(currentIdx, this.get(constraintColors[c][i]))
-                currentIdx++
+            while (i !== k) {
+                this.set(j, this.get(k))
+                indexes[j] = j
+
+                j = k
+                k = indexes[j]
             }
 
-            this.colors[c*64+1] = currentIdx - this.colors[c*64]
+            this.set(j, originalValue)
+            indexes[j] = j
         }
-
-        this.data.restValues = coloredConstraints.data.restValues
-        this.data.compliances = coloredConstraints.data.compliances
-        this.data.affectedParticles = coloredConstraints.data.affectedParticles
-
-        this.colorCount = constraintColors.length
     }
 }
 
