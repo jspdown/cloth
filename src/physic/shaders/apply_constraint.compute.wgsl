@@ -17,21 +17,20 @@ struct ColorConfig {
 @group(1) @binding(0) var<uniform> solverConfig: SolverConfig;
 @group(2) @binding(0) var<uniform> colorConfig: ColorConfig;
 
-@stage(compute) @workgroup_size(16, 16)
+@compute @workgroup_size(16, 16)
 fn main(@builtin(num_workgroups) workgroup_size: vec3<u32>, @builtin(global_invocation_id) global_id: vec3<u32>) {
     let w = workgroup_size.x * 16u;
     let h = workgroup_size.y * 16u;
 
-    let id = global_id.x
+    let constraint_id = global_id.x
         + (global_id.y * w)
         + (global_id.z * w * h);
 
-    // Guard against out-of-bounds work group sizes.
-    if (id >= u32(colorConfig.count)) {
+    // Skip constraints that are not of the right color.
+    if constraint_id < colorConfig.start || constraint_id >= colorConfig.start + colorConfig.count {
         return;
     }
 
-    var constraint_id = colorConfig.start + id;
     var p1_id = u32(affectedParticles[constraint_id * 2u]);
     var p2_id = u32(affectedParticles[constraint_id * 2u + 1u]);
 

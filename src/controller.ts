@@ -19,6 +19,7 @@ interface ClothConfig {
     heightDivisions: number
     stretchCompliance: number
     bendCompliance: number
+    enableBendConstraints: boolean
 }
 
 export class Controller {
@@ -48,10 +49,11 @@ export class Controller {
                 density: 0.270,
                 width: 10,
                 height: 10,
-                widthDivisions: 10,
-                heightDivisions: 10,
+                widthDivisions: 1,
+                heightDivisions: 1,
                 stretchCompliance: 0,
                 bendCompliance: 0.3,
+                enableBendConstraints: true,
             },
         }
     }
@@ -220,6 +222,7 @@ export class Controller {
                 density: config.cloth.density,
                 stretchCompliance: config.cloth.stretchCompliance,
                 bendCompliance: config.cloth.bendCompliance,
+                enableBendConstraints: config.cloth.enableBendConstraints,
             })
         }
 
@@ -243,6 +246,7 @@ export class Controller {
                 heightDivisions: parseInt(data.get("cloth-height-divisions") as string),
                 stretchCompliance: parseFloat(data.get("cloth-stretch-compliance") as string),
                 bendCompliance: parseFloat(data.get("cloth-bend-compliance") as string),
+                enableBendConstraints: this.config.cloth.enableBendConstraints,
             },
             solver: {
                 ...this.config.solver,
@@ -275,6 +279,7 @@ export class Controller {
             density: this.config.cloth.density,
             stretchCompliance: this.config.cloth.stretchCompliance,
             bendCompliance: this.config.cloth.bendCompliance,
+            enableBendConstraints: this.config.cloth.enableBendConstraints,
         })
     }
 

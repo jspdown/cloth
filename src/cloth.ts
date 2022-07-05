@@ -13,6 +13,8 @@ export interface ClothConfig {
     density: number
     stretchCompliance: number
     bendCompliance: number
+
+    enableBendConstraints: boolean
 }
 
 // Cloth holds a cloth mesh.
@@ -44,11 +46,13 @@ export class Cloth {
             || this.particles.uploadNeeded
             || this.constraints.uploadNeeded
     }
-    public upload(): void {
+    public async upload(): Promise<void> {
         if (this.geometry.vertices.uploadNeeded) this.geometry.vertices.upload()
         if (this.geometry.triangles.uploadNeeded) this.geometry.triangles.upload()
         if (this.particles.uploadNeeded) this.particles.upload()
-        if (this.constraints.uploadNeeded) this.constraints.upload()
+        if (this.constraints.uploadNeeded) {
+            await this.constraints.upload()
+        }
     }
 
     private initParticles() {
@@ -97,6 +101,10 @@ export class Cloth {
                 this.particles.get(end),
                 this.config.stretchCompliance)
         })
+
+        if (!this.config.enableBendConstraints) {
+            return
+        }
 
         topology.adjacentTriangles.forEach(([a, b]: Pair<number>) => {
             const ta = this.geometry.triangles.get(a).toArray()

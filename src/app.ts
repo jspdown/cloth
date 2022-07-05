@@ -41,13 +41,14 @@ export class App {
             gravity: vec3.create(0, -9.8, 0),
         })
 
-         const geometry = buildPlaneGeometry(this.device, 10, 10, 30, 30)
+        const geometry = buildPlaneGeometry(this.device, 10, 10, 10, 10)
 
         this.cloth = new Cloth(this.device, geometry, {
             unit: 0.01,
             density: 0.270,
             stretchCompliance: 0,
             bendCompliance: 0.3,
+            enableBendConstraints: true,
         })
     }
 
@@ -63,7 +64,7 @@ export class App {
             timer.start()
 
             if (this.cloth.uploadNeeded) {
-                this.cloth.upload()
+                await this.cloth.upload()
             }
 
             const encoder = this.device.createCommandEncoder()

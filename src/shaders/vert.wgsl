@@ -10,7 +10,7 @@ struct Camera {
 
 @group(0) @binding(0) var<uniform> camera: Camera;
 
-@stage(vertex)
+@vertex
 fn main(@location(0) position: vec3<f32>, @location(1) normal: vec3<i32>) -> Output {
     var output: Output;
 

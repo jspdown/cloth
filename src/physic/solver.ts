@@ -225,7 +225,7 @@ export class Solver {
         for (let i = 0; i < object.constraints.colorCount; i++) {
             encoder.setBindGroup(2, state.currentColorBindGroup, [i*256])
 
-            const dispatch = Math.sqrt(object.constraints.colors[i*64+1])
+            const dispatch = Math.sqrt(object.constraints.count)
             const dispatchX = Math.ceil(dispatch/16)
             const dispatchY = Math.ceil(dispatch/16)
 
