@@ -67,6 +67,9 @@ export class Controller {
                 case "Space":
                     this.togglePlay()
                     break
+                case "KeyW":
+                    this.toggleWireframe()
+                    break
             }
         })
     }
@@ -280,5 +283,9 @@ export class Controller {
         this.app.paused = this.config.paused
 
         this.renderNeeded = true
+    }
+
+    private toggleWireframe(): void {
+        this.app.cloth.wireframe = !this.app.cloth.wireframe
     }
 }

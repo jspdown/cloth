@@ -21,6 +21,7 @@ export class Cloth {
     public geometry: Geometry
     public particles: Particles
     public constraints: Constraints
+    public wireframe: boolean
 
     private readonly config: ClothConfig
     private readonly device: GPUDevice
@@ -31,6 +32,7 @@ export class Cloth {
         this.device = device
 
         this.geometry = geometry
+        this.wireframe = false
 
         this.initParticles()
         this.initConstraints()

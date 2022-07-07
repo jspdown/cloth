@@ -3,6 +3,7 @@ import fragShaderCode from "./shaders/frag.wgsl"
 
 import {Camera} from "./camera"
 import {Geometry} from "./geometry"
+import { Triangles } from "./triangles"
 
 const cameraLayoutDesc: GPUBindGroupLayoutDescriptor = {
     entries: [{
@@ -16,6 +17,7 @@ interface RenderObject {
     id: string
 
     geometry: Geometry
+    wireframe: boolean
 }
 
 // Renderer is a basic 3D renderer.
@@ -50,7 +52,7 @@ export class Renderer {
 
     public render(encoder: GPUCommandEncoder, object: RenderObject, camera: Camera): void {
         let state = this.objectStates[object.id]
-        if (!state) {
+        if (!state || state.wireframe !== object.wireframe) {
             state = new RenderObjectState(this.device, object, camera)
             this.objectStates[object.id] = state
         }
@@ -89,9 +91,9 @@ export class Renderer {
         passEncoder.setScissorRect(0, 0, width, height)
         passEncoder.setVertexBuffer(0, object.geometry.vertices.positionBuffer)
         passEncoder.setVertexBuffer(1, object.geometry.vertices.normalBuffer)
-        passEncoder.setIndexBuffer(object.geometry.triangles.indexBuffer, "uint32")
+        passEncoder.setIndexBuffer(state.indexBuffer, "uint32")
         passEncoder.setBindGroup(0, state.cameraBindGroup)
-        passEncoder.drawIndexed(object.geometry.triangles.count * 3)
+        passEncoder.drawIndexed(state.indexCount)
         passEncoder.end()
     }
 }
@@ -99,10 +101,17 @@ export class Renderer {
 class RenderObjectState {
     public pipeline: GPURenderPipeline
     public cameraBindGroup: GPUBindGroup
+    public indexBuffer: GPUBuffer
+    public indexCount: number
+    public wireframe: boolean
 
     constructor(device: GPUDevice, object: RenderObject, camera: Camera) {
         const vertModule = device.createShaderModule({ code: vertShaderCode })
         const fragModule = device.createShaderModule({ code: fragShaderCode })
+
+        this.wireframe = object.wireframe
+        this.indexBuffer = object.geometry.triangles.indexBuffer
+        this.indexCount = object.geometry.triangles.count * 3
 
         this.cameraBindGroup = device.createBindGroup({
             layout: device.createBindGroupLayout(cameraLayoutDesc),
@@ -110,6 +119,25 @@ class RenderObjectState {
                 { binding: 0, resource: { buffer: camera.buffer } },
             ],
         })
+
+        let topology: GPUPrimitiveTopology = "triangle-list"
+
+        if (this.wireframe) {
+            topology = "line-list"
+
+            const indices = buildWireframeIndices(object.geometry.triangles)
+
+            this.indexCount = indices.length
+            this.indexBuffer = device.createBuffer({
+                label: "index",
+                size: fourBytesAlignment(indices.byteLength),
+                usage: GPUBufferUsage.INDEX | GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+            })
+            device.queue.writeBuffer(
+                this.indexBuffer, 0,
+                indices, 0,
+                indices.length)
+        }
 
         this.pipeline = device.createRenderPipeline({
             layout: device.createPipelineLayout({
@@ -142,7 +170,7 @@ class RenderObjectState {
             primitive: {
                 frontFace: "cw",
                 cullMode: "none",
-                topology: "triangle-list",
+                topology,
             },
             depthStencil: {
                 depthWriteEnabled: true,
@@ -150,6 +178,23 @@ class RenderObjectState {
                 format: "depth24plus-stencil8",
             },
         })
-
     }
+}
+
+function buildWireframeIndices(triangles: Triangles): Uint32Array {
+    const topology = triangles.extractTopology()
+    const indices = new Uint32Array(topology.edges.length * 2)
+
+    let idx = 0
+    topology.edges.forEach(edge => {
+        indices[idx] = edge[0]
+        indices[idx+1] = edge[1]
+        idx += 2
+    })
+
+    return indices
+}
+
+function fourBytesAlignment(size: number): number {
+    return (size + 3) & ~3
 }
