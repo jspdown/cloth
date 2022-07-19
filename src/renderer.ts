@@ -36,7 +36,7 @@ export class Renderer {
             device: this.device,
             format: "bgra8unorm",
             usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC,
-            compositingAlphaMode: "opaque",
+            alphaMode: "opaque",
         })
 
         const depthTextureDesc: GPUTextureDescriptor = {

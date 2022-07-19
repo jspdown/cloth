@@ -17,7 +17,7 @@ struct ColorConfig {
 @group(1) @binding(0) var<uniform> solverConfig: SolverConfig;
 @group(2) @binding(0) var<uniform> colorConfig: ColorConfig;
 
-@stage(compute) @workgroup_size(16, 16)
+@compute @workgroup_size(16, 16)
 fn main(@builtin(num_workgroups) workgroup_size: vec3<u32>, @builtin(global_invocation_id) global_id: vec3<u32>) {
     let w = workgroup_size.x * 16u;
     let h = workgroup_size.y * 16u;
