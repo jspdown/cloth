@@ -11,6 +11,8 @@ export interface Config {
     height: number
     zoomSpeed?: number
     distance?: number
+    rotationX?: number
+    rotationY?: number
 }
 
 const f32Size = 4
@@ -41,12 +43,14 @@ export class Camera {
             far: 1000,
             zoomSpeed: 2,
             distance: 5,
+            rotationX: 90,
+            rotationY: 0,
         }, ...config }
 
         this.zoom = 0
         this.dragging = false
-        this.rotateX = 90
-        this.rotateY = 0
+        this.rotateX = this.config.rotationX
+        this.rotateY = this.config.rotationY
         this.x = 0.0
         this.y = 0.0
         this.lastX = 0.0
@@ -60,7 +64,7 @@ export class Camera {
 
         canvas.addEventListener("mousedown", () => this.onMouseButtonPressed())
         canvas.addEventListener("mouseup", () => this.onMouseButtonReleased())
-        canvas.addEventListener("wheel", e => this.onMouseWheel(e.deltaY))
+        canvas.addEventListener("wheel", e => this.onMouseWheel(e.deltaY), {passive: true})
         canvas.addEventListener("mousemove", e => this.onMouseMove(e.clientX, e.clientY))
 
         this.updateUniform()

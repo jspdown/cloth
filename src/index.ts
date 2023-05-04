@@ -9,10 +9,13 @@ async function main() {
         throw new Error("WebGPU is not supported on this browser.")
     }
 
-    const adapter = await gpu.requestAdapter()
-    const device = await adapter.requestDevice()
+    const adapter = await gpu.requestAdapter({
+        powerPreference: "high-performance"
+    })
 
-    printLimits(adapter.limits)
+    await printSystemInfo(adapter)
+
+    const device = await adapter.requestDevice()
 
     const canvas = document.getElementById("app") as HTMLCanvasElement
 
@@ -34,11 +37,22 @@ main()
     .catch(err => console.error(err.toString() + "\n" + err.stack))
 
 
-function printLimits(limits: GPUSupportedLimits) {
-    let str = ""
-    for (let key in limits as any) {
-        str += ` - ${key}: **${(limits as any)[key]}**\n`
+async function printSystemInfo(adapter: GPUAdapter) {
+    const adapterInfo = await adapter.requestAdapterInfo()
+    const adapterInfoLog = `adapter info:
+    - vendor=${adapterInfo.vendor}
+    - architecture=${adapterInfo.architecture}
+    - description=${adapterInfo.description}
+    `
+
+    console.debug(adapterInfoLog)
+    logger.info(adapterInfoLog)
+
+    let adapterLimitLog = "adapter limits:\n"
+    for (let key in adapter.limits as any) {
+        adapterLimitLog += ` - ${key}: **${(adapter.limits as any)[key]}**\n`
     }
 
-    logger.info(`limits:\n ${str}`)
+    console.debug(adapterLimitLog)
+    logger.info(adapterLimitLog)
 }

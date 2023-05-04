@@ -31,6 +31,9 @@ export class App {
         this.camera = new Camera(device, canvas, {
             width: canvas.width,
             height: canvas.height,
+            distance: 12,
+            rotationX: 25,
+            rotationY: 0,
         })
 
         this.renderer = new Renderer(device, canvas)

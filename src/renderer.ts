@@ -36,10 +36,11 @@ export class Renderer {
             device: this.device,
             format: "bgra8unorm",
             usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC,
-            alphaMode: "opaque",
+            alphaMode: "opaque"
         })
 
         const depthTextureDesc: GPUTextureDescriptor = {
+            label: "depth texture",
             size: [canvas.width, canvas.height, 1],
             dimension: "2d",
             format: "depth24plus-stencil8",
@@ -58,7 +59,9 @@ export class Renderer {
         }
 
         const colorTexture = this.context.getCurrentTexture()
-        const colorTextureView = colorTexture.createView()
+        const colorTextureView = colorTexture.createView({
+            label: "color texture"
+        })
 
         let colorAttachment: GPURenderPassColorAttachment = {
             view: colorTextureView,

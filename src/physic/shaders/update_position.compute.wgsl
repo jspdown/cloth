@@ -5,7 +5,7 @@ struct SolverConfig {
 
 @group(0) @binding(0) var<storage, read_write> positions: array<vec3<f32>>;
 @group(0) @binding(1) var<storage, read> estimatedPositions: array<vec3<f32>>;
-@group(0) @binding(2) var<storage, write> velocities: array<vec3<f32>>;
+@group(0) @binding(2) var<storage, read_write> velocities: array<vec3<f32>>;
 
 @group(1) @binding(0) var<uniform> solverConfig: SolverConfig;
 
